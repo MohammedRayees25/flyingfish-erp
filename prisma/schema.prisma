@@ -1,0 +1,640 @@
+// Flying Fish Scuba School ERP — normalized PostgreSQL schema (Supabase)
+// Auth is handled by Supabase Auth (auth.users). The `User` model here is the
+// public-schema profile row (same id as auth.users.id), created via a DB
+// trigger — see prisma/sql/auth_trigger.sql.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  SUPER_ADMIN
+  FOUNDER
+  MANAGER
+  INSTRUCTOR
+  MARKETING
+  ACCOUNTANT
+}
+
+enum SwimmingStatus {
+  NON_SWIMMER
+  WEAK_SWIMMER
+  COMPETENT_SWIMMER
+  STRONG_SWIMMER
+}
+
+enum CertificationLevel {
+  NONE
+  OPEN_WATER
+  ADVANCED_OPEN_WATER
+  RESCUE
+  DIVEMASTER
+  INSTRUCTOR
+  OTHER
+}
+
+enum ActivityType {
+  BOAT_RIDE
+  SHORT_DIVE
+  LONG_DIVE
+  LONG_DOUBLE_DIVE
+  FUN_DIVE
+  DIVE_GOA
+  SEI
+  FLYING_FISH
+  PADI_OWD
+  SSI_OWD
+  PADI_AOW
+  SSI_AOW
+  EANX
+  RESCUE
+  REACT_RIGHT
+  PPB
+  ADVANCED_ADVENTURE
+  WRECK_SPECIALTY
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  UPI
+  BANK_TRANSFER
+  ONLINE_GATEWAY
+  OTHER
+}
+
+enum PaymentStatus {
+  PENDING
+  PARTIAL
+  PAID
+  REFUNDED
+  CANCELLED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  HALF_DAY
+  LEAVE
+  HOLIDAY
+}
+
+enum CertificationAgency {
+  PADI
+  SSI
+  OTHER
+}
+
+enum CertificationStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  PENDING_CARD
+  ISSUED
+}
+
+enum TransactionType {
+  REVENUE
+  EXPENSE
+}
+
+enum ExpenseCategory {
+  BOAT
+  TEMPO
+  FREELANCER
+  SNACKS
+  SALARY
+  MARKETING
+  EQUIPMENT
+  MAINTENANCE
+  OTHER
+}
+
+enum RevenueCategory {
+  BOOKING
+  COURSE
+  MERCHANDISE
+  OTHER
+}
+
+enum ReviewSentiment {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+}
+
+enum ReviewReplyStatus {
+  PENDING
+  REPLIED
+  NOT_NEEDED
+}
+
+enum SocialPlatform {
+  INSTAGRAM
+  YOUTUBE
+  FACEBOOK
+  LINKEDIN
+  EXPLURGER
+  GOOGLE_BUSINESS
+}
+
+enum FollowUpType {
+  REPEAT_GUEST
+  BIRTHDAY
+  CERTIFICATION_REMINDER
+  GENERAL
+}
+
+enum FollowUpChannel {
+  WHATSAPP
+  EMAIL
+  CALL
+}
+
+enum FollowUpStatus {
+  PENDING
+  DONE
+  SNOOZED
+  CANCELLED
+}
+
+enum NotificationType {
+  UPCOMING_COURSE
+  PENDING_PAYMENT
+  PENDING_FREELANCER_PAYMENT
+  PENDING_CERTIFICATION
+  DAILY_REMINDER
+  GENERAL
+}
+
+enum VendorPaymentStatus {
+  PENDING
+  PARTIAL
+  PAID
+}
+
+// ---------------------------------------------------------------------------
+// Identity
+// ---------------------------------------------------------------------------
+
+model User {
+  id        String   @id @db.Uuid
+  email     String   @unique
+  fullName  String
+  phone     String?
+  role      UserRole @default(INSTRUCTOR)
+  avatarUrl String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bookingsAsInstructor Booking[]            @relation("BookingInstructor")
+  staffAttendance      StaffAttendance[]
+  diveLogsAsInstructor DiveLog[]            @relation("DiveLogInstructor")
+  certificationsTaught GuestCertification[] @relation("CertificationInstructor")
+  followUpsAssigned    FollowUp[]           @relation("FollowUpAssignee")
+  transactionsCreated  FinanceTransaction[] @relation("TransactionCreatedBy")
+  reviewsMentioned     GoogleReview[]       @relation("ReviewInstructorMentioned")
+  notifications        Notification[]       @relation("NotificationTarget")
+
+  @@map("users")
+}
+
+// ---------------------------------------------------------------------------
+// Guests
+// ---------------------------------------------------------------------------
+
+model Guest {
+  id                    String             @id @default(uuid()) @db.Uuid
+  fullName              String
+  phone                 String
+  email                 String?
+  nationality           String?
+  emergencyContactName  String?
+  emergencyContactPhone String?
+  medicalDeclaration    Boolean            @default(false)
+  medicalNotes          String?
+  swimmingStatus        SwimmingStatus     @default(COMPETENT_SWIMMER)
+  certificationLevel    CertificationLevel @default(NONE)
+  previousDives         Int                @default(0)
+  dateOfBirth           DateTime?          @db.Date
+  source                String?
+  notes                 String?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  bookings       Booking[]
+  payments       Payment[]
+  certifications GuestCertification[]
+  followUps      FollowUp[]
+  reviews        GoogleReview[]       @relation("ReviewGuest")
+
+  @@index([phone])
+  @@index([email])
+  @@index([fullName])
+  @@map("guests")
+}
+
+// ---------------------------------------------------------------------------
+// Operations: dive sites, boats, bookings, payments
+// ---------------------------------------------------------------------------
+
+model DiveSite {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @unique
+  location    String?
+  description String?
+  createdAt   DateTime @default(now())
+
+  bookings Booking[]
+  diveLogs DiveLog[]
+
+  @@map("dive_sites")
+}
+
+model Boat {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  vendor    String?
+  capacity  Int?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  bookings           Booking[]
+  boatSharingEntries BoatSharingEntry[]
+
+  @@map("boats")
+}
+
+model Booking {
+  id           String        @id @default(uuid()) @db.Uuid
+  guestId      String        @db.Uuid
+  guest        Guest         @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  instructorId String?       @db.Uuid
+  instructor   User?         @relation("BookingInstructor", fields: [instructorId], references: [id])
+  boatId       String?       @db.Uuid
+  boat         Boat?         @relation(fields: [boatId], references: [id])
+  diveSiteId   String?       @db.Uuid
+  diveSite     DiveSite?     @relation(fields: [diveSiteId], references: [id])
+  activityType ActivityType
+  date         DateTime      @db.Date
+  status       BookingStatus @default(PENDING)
+  price        Decimal       @default(0) @db.Decimal(10, 2)
+  notes        String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  payments Payment[]
+
+  @@index([date])
+  @@index([status])
+  @@index([guestId])
+  @@map("bookings")
+}
+
+model Payment {
+  id        String        @id @default(uuid()) @db.Uuid
+  guestId   String        @db.Uuid
+  guest     Guest         @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  bookingId String?       @db.Uuid
+  booking   Booking?      @relation(fields: [bookingId], references: [id])
+  amount    Decimal       @db.Decimal(10, 2)
+  method    PaymentMethod @default(CASH)
+  status    PaymentStatus @default(PENDING)
+  paidAt    DateTime?
+  dueDate   DateTime?     @db.Date
+  notes     String?
+  createdAt DateTime      @default(now())
+
+  @@index([status])
+  @@index([guestId])
+  @@map("payments")
+}
+
+// ---------------------------------------------------------------------------
+// Boat sharing (replaces the Boat Sharing Excel sheet)
+// ---------------------------------------------------------------------------
+
+model BoatSharingEntry {
+  id                  String              @id @default(uuid()) @db.Uuid
+  date                DateTime            @db.Date
+  boatId              String?             @db.Uuid
+  boat                Boat?               @relation(fields: [boatId], references: [id])
+  boatVendorName      String?
+  boatAmount          Decimal             @default(0) @db.Decimal(10, 2)
+  tempoAmount         Decimal             @default(0) @db.Decimal(10, 2)
+  ffGuests            Int                 @default(0)
+  dgGuests            Int                 @default(0)
+  seiGuests           Int                 @default(0)
+  totalGuests         Int                 @default(0)
+  vendorPaymentStatus VendorPaymentStatus @default(PENDING)
+  outstandingAmount   Decimal             @default(0) @db.Decimal(10, 2)
+  notes               String?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  splits BoatSharingSplit[]
+
+  @@index([date])
+  @@map("boat_sharing_entries")
+}
+
+model BoatSharingSplit {
+  id         String           @id @default(uuid()) @db.Uuid
+  entryId    String           @db.Uuid
+  entry      BoatSharingEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  partyName  String
+  guestCount Int              @default(0)
+  amountDue  Decimal          @default(0) @db.Decimal(10, 2)
+  amountPaid Decimal          @default(0) @db.Decimal(10, 2)
+  status     PaymentStatus    @default(PENDING)
+
+  @@map("boat_sharing_splits")
+}
+
+// ---------------------------------------------------------------------------
+// Staff & freelancers
+// ---------------------------------------------------------------------------
+
+model StaffAttendance {
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @db.Uuid
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      DateTime         @db.Date
+  status    AttendanceStatus @default(PRESENT)
+  notes     String?
+  createdAt DateTime         @default(now())
+
+  @@unique([userId, date])
+  @@index([date])
+  @@map("staff_attendance")
+}
+
+model Freelancer {
+  id        String   @id @default(uuid()) @db.Uuid
+  fullName  String
+  role      String
+  phone     String?
+  dayRate   Decimal  @default(0) @db.Decimal(10, 2)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  attendance FreelancerAttendance[]
+  payments   FreelancerPayment[]
+
+  @@map("freelancers")
+}
+
+model FreelancerAttendance {
+  id           String           @id @default(uuid()) @db.Uuid
+  freelancerId String           @db.Uuid
+  freelancer   Freelancer       @relation(fields: [freelancerId], references: [id], onDelete: Cascade)
+  date         DateTime         @db.Date
+  status       AttendanceStatus @default(PRESENT)
+  notes        String?
+
+  @@unique([freelancerId, date])
+  @@index([date])
+  @@map("freelancer_attendance")
+}
+
+model FreelancerPayment {
+  id           String        @id @default(uuid()) @db.Uuid
+  freelancerId String        @db.Uuid
+  freelancer   Freelancer    @relation(fields: [freelancerId], references: [id], onDelete: Cascade)
+  amount       Decimal       @db.Decimal(10, 2)
+  status       PaymentStatus @default(PENDING)
+  dueDate      DateTime?     @db.Date
+  paidAt       DateTime?
+  notes        String?
+  createdAt    DateTime      @default(now())
+
+  @@index([status])
+  @@map("freelancer_payments")
+}
+
+// ---------------------------------------------------------------------------
+// Novotel snacks
+// ---------------------------------------------------------------------------
+
+model SnackLog {
+  id            String   @id @default(uuid()) @db.Uuid
+  date          DateTime @unique @db.Date
+  snackBoxCount Int      @default(0)
+  buffetCount   Int      @default(0)
+  cost          Decimal  @default(0) @db.Decimal(10, 2)
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  @@map("snack_logs")
+}
+
+// ---------------------------------------------------------------------------
+// Dive logs
+// ---------------------------------------------------------------------------
+
+model DiveLog {
+  id             String    @id @default(uuid()) @db.Uuid
+  date           DateTime  @db.Date
+  diveSiteId     String?   @db.Uuid
+  diveSite       DiveSite? @relation(fields: [diveSiteId], references: [id])
+  visibility     Int?
+  current        String?
+  temperature    Float?
+  weather        String?
+  marineLifeSeen String?
+  instructorId   String?   @db.Uuid
+  instructor     User?     @relation("DiveLogInstructor", fields: [instructorId], references: [id])
+  notes          String?
+  createdAt      DateTime  @default(now())
+
+  @@index([date])
+  @@map("dive_logs")
+}
+
+// ---------------------------------------------------------------------------
+// Certifications
+// ---------------------------------------------------------------------------
+
+model CertificationCourse {
+  id     String              @id @default(uuid()) @db.Uuid
+  name   String
+  agency CertificationAgency
+  track  String?
+
+  certifications GuestCertification[]
+
+  @@unique([name, agency])
+  @@map("certification_courses")
+}
+
+model GuestCertification {
+  id                String              @id @default(uuid()) @db.Uuid
+  guestId           String              @db.Uuid
+  guest             Guest               @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  courseId          String              @db.Uuid
+  course            CertificationCourse @relation(fields: [courseId], references: [id])
+  instructorId      String?             @db.Uuid
+  instructor        User?               @relation("CertificationInstructor", fields: [instructorId], references: [id])
+  progress          Int                 @default(0)
+  status            CertificationStatus @default(NOT_STARTED)
+  certificateNumber String?
+  startDate         DateTime?           @db.Date
+  completionDate    DateTime?           @db.Date
+  notes             String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  @@index([status])
+  @@map("guest_certifications")
+}
+
+// ---------------------------------------------------------------------------
+// Finance
+// ---------------------------------------------------------------------------
+
+model FinanceTransaction {
+  id                 String           @id @default(uuid()) @db.Uuid
+  type               TransactionType
+  expenseCategory    ExpenseCategory?
+  revenueCategory    RevenueCategory?
+  amount             Decimal          @db.Decimal(10, 2)
+  date               DateTime         @db.Date
+  description        String?
+  guestId            String?          @db.Uuid
+  bookingId          String?          @db.Uuid
+  boatSharingEntryId String?          @db.Uuid
+  freelancerId       String?          @db.Uuid
+  createdById        String?          @db.Uuid
+  createdBy          User?            @relation("TransactionCreatedBy", fields: [createdById], references: [id])
+  createdAt          DateTime         @default(now())
+
+  @@index([date])
+  @@index([type])
+  @@map("finance_transactions")
+}
+
+// ---------------------------------------------------------------------------
+// Google reviews & social media
+// ---------------------------------------------------------------------------
+
+model GoogleReview {
+  id                    String            @id @default(uuid()) @db.Uuid
+  reviewerName          String
+  guestId               String?           @db.Uuid
+  guest                 Guest?            @relation("ReviewGuest", fields: [guestId], references: [id])
+  rating                Int
+  reviewText            String?
+  reviewDate            DateTime          @db.Date
+  replyStatus           ReviewReplyStatus @default(PENDING)
+  instructorMentionedId String?           @db.Uuid
+  instructorMentioned   User?             @relation("ReviewInstructorMentioned", fields: [instructorMentionedId], references: [id])
+  sentiment             ReviewSentiment?
+  createdAt             DateTime          @default(now())
+
+  @@index([reviewDate])
+  @@map("google_reviews")
+}
+
+model SocialMediaPost {
+  id             String         @id @default(uuid()) @db.Uuid
+  platform       SocialPlatform
+  postDate       DateTime       @db.Date
+  url            String?
+  caption        String?
+  views          Int            @default(0)
+  likes          Int            @default(0)
+  comments       Int            @default(0)
+  reach          Int            @default(0)
+  leadsGenerated Int            @default(0)
+  createdAt      DateTime       @default(now())
+
+  @@index([platform, postDate])
+  @@map("social_media_posts")
+}
+
+// ---------------------------------------------------------------------------
+// CRM
+// ---------------------------------------------------------------------------
+
+model FollowUp {
+  id           String          @id @default(uuid()) @db.Uuid
+  guestId      String          @db.Uuid
+  guest        Guest           @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  type         FollowUpType
+  channel      FollowUpChannel @default(WHATSAPP)
+  dueDate      DateTime        @db.Date
+  status       FollowUpStatus  @default(PENDING)
+  assignedToId String?         @db.Uuid
+  assignedTo   User?           @relation("FollowUpAssignee", fields: [assignedToId], references: [id])
+  notes        String?
+  createdAt    DateTime        @default(now())
+
+  @@index([dueDate])
+  @@index([status])
+  @@map("follow_ups")
+}
+
+// ---------------------------------------------------------------------------
+// Notifications
+// ---------------------------------------------------------------------------
+
+model Notification {
+  id           String           @id @default(uuid()) @db.Uuid
+  type         NotificationType
+  title        String
+  message      String
+  targetUserId String?          @db.Uuid
+  targetUser   User?            @relation("NotificationTarget", fields: [targetUserId], references: [id])
+  targetRole   UserRole?
+  isRead       Boolean          @default(false)
+  entityType   String?
+  entityId     String?
+  createdAt    DateTime         @default(now())
+
+  @@index([targetUserId, isRead])
+  @@map("notifications")
+}
+
+// ---------------------------------------------------------------------------
+// Season & daily ops
+// ---------------------------------------------------------------------------
+
+model Season {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @unique
+  startDate DateTime @db.Date
+  endDate   DateTime @db.Date
+  isActive  Boolean  @default(false)
+
+  @@map("seasons")
+}
+
+model DailyOpsLog {
+  id           String   @id @default(uuid()) @db.Uuid
+  date         DateTime @unique @db.Date
+  weather      String?
+  visibility   Int?
+  seaCondition String?
+  notes        String?
+
+  @@map("daily_ops_logs")
+}
