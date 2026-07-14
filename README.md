@@ -33,6 +33,12 @@ role has a fixed set of accessible modules, defined in `src/lib/permissions.ts`.
 Module-level access is enforced both in the sidebar/navigation and on the server
 (every server action / page calls `requireModuleAccess`).
 
+There is a single `User` model in `prisma/schema.prisma` — it *is* the staff
+profile (there's no separate "Staff" table). Its `id` always equals the
+matching Supabase Auth `auth.users.id`; a row must exist there for someone to
+sign in at all (see the [Troubleshooting](#troubleshooting-no-staff-profile-is-linked-to-this-account)
+note below if it doesn't).
+
 ## Project structure
 
 ```
@@ -112,15 +118,29 @@ Then, in the Supabase SQL editor, run `prisma/sql/auth_trigger.sql`. This keeps 
 
 ### 5. Create your first Super Admin
 
-In the Supabase dashboard, go to **Authentication → Users → Invite user**, and set
-the invited user's metadata to:
+The easiest way — this creates a real Supabase Auth account **and** its linked
+`public.users` profile in one step, using the `SUPABASE_SERVICE_ROLE_KEY` from
+step 2:
+
+```bash
+npm run db:bootstrap-admin
+```
+
+It creates (or links, if it already exists) a Supabase Auth account for
+`admin@flyingfish.in` — override with `DEFAULT_ADMIN_EMAIL` /
+`DEFAULT_ADMIN_PASSWORD` env vars — and prints the password once if it generated
+one. Safe to re-run any time (e.g. after a redeploy) — it never creates a second
+account or overwrites an existing SUPER_ADMIN.
+
+Alternatively, invite someone by hand in the Supabase dashboard under
+**Authentication → Users → Invite user**, setting their metadata to:
 
 ```json
 { "full_name": "Your Name", "role": "SUPER_ADMIN" }
 ```
 
-The trigger from step 4 will create a matching `public.users` row with that role.
-Set a password for the account (or use the invite email) and sign in at `/login`.
+The trigger from step 4 creates a matching `public.users` row with that role when
+they accept the invite.
 
 ### 6. (Optional) Seed demo data
 
@@ -131,11 +151,31 @@ npm run db:seed
 This populates realistic demo guests, bookings, payments, boat sharing, staff
 attendance, freelancers, dive logs, certifications, finance transactions, reviews,
 social posts and CRM follow-ups — everything the dashboard needs to look alive.
+It also runs the same default-admin bootstrap as step 5, so a fresh database is
+always left with a working login.
 
-The seed creates its own placeholder staff/instructor `User` rows (fixed UUIDs, not
-tied to real Supabase Auth accounts) purely so demo bookings have realistic
-instructor/staff references — they cannot sign in. Your real Super Admin account
-from step 5 is separate and unaffected.
+The rest of the seed creates its own placeholder staff/instructor `User` rows
+(fixed UUIDs, not tied to real Supabase Auth accounts) purely so demo bookings
+have realistic instructor/staff references — they cannot sign in. Your Super
+Admin account from step 5 is separate and unaffected.
+
+### Troubleshooting: "No staff profile is linked to this account"
+
+This means a Supabase Auth account exists but has no matching row in
+`public.users` — usually because the account was created before
+`auth_trigger.sql` (step 4) was installed, since the trigger only fires on new
+signups. Fix it by either:
+
+- Running `npm run db:bootstrap-admin` (only auto-heals the specific
+  `DEFAULT_ADMIN_EMAIL` account, and only while no SUPER_ADMIN exists yet), or
+- Running `prisma/sql/backfill_missing_profiles.sql` in the Supabase SQL editor,
+  which back-fills a profile for every `auth.users` row that's missing one (then
+  set the right role for each by hand).
+
+Signing in again with the default admin's email after either fix will now
+succeed and land on the dashboard — the sign-in flow itself also self-heals this
+one specific case automatically (see `src/actions/auth.ts`), so if you're using
+the default admin email you may not need to run anything at all.
 
 ### 7. Run the app
 
@@ -156,7 +196,8 @@ Visit `http://localhost:3000`.
 | `npm run db:generate` | Regenerate the Prisma client |
 | `npm run db:migrate` | Create/apply a migration (dev) |
 | `npm run db:deploy` | Apply pending migrations (CI/production) |
-| `npm run db:seed` | Run `prisma/seed.ts` |
+| `npm run db:seed` | Run `prisma/seed.ts` (also ensures the default admin) |
+| `npm run db:bootstrap-admin` | Ensure the default SUPER_ADMIN account exists, without touching any other data |
 | `npm run db:studio` | Open Prisma Studio |
 
 ## Deployment

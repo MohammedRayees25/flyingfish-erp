@@ -22,6 +22,7 @@ import {
   UserRole,
 } from "@prisma/client";
 import { computeBoatSharingSplits } from "@/lib/boat-sharing";
+import { ensureDefaultAdmin } from "@/lib/supabase/bootstrap-admin";
 
 const prisma = new PrismaClient();
 
@@ -643,6 +644,23 @@ async function main() {
       isActive: true,
     },
   });
+
+  // ---------------------------------------------------------------------
+  // Default admin — always ensured, independent of the demo data above.
+  // Creates (or links) a real Supabase Auth account so there's always at
+  // least one working SUPER_ADMIN login after seeding. Skips cleanly if
+  // Supabase credentials aren't configured (e.g. local/offline seeding).
+  // ---------------------------------------------------------------------
+  const adminResult = await ensureDefaultAdmin();
+  if (adminResult.status === "skipped") {
+    console.log(`Default admin: skipped — ${adminResult.reason}`);
+  } else if (adminResult.status === "created") {
+    console.log(`Default admin: created ${adminResult.email}`);
+    console.log(`  Password: ${adminResult.password}`);
+    console.log("  Save this now — it will not be shown again.");
+  } else {
+    console.log(`Default admin: linked existing Supabase Auth account ${adminResult.email}`);
+  }
 
   console.log("Seed complete ✅");
 }
