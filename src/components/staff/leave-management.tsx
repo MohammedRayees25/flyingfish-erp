@@ -38,7 +38,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-type LeaveRecord = StaffAttendance & { user: User; status: AttendanceStatus };
+type LeaveRecord = StaffAttendance & {
+  user: Omit<User, "monthlySalary">;
+  status: AttendanceStatus;
+};
 
 const defaultValues: LeaveInput = {
   userId: "",
@@ -51,7 +54,7 @@ export function LeaveManagement({
   staff,
   leaveRecords,
 }: {
-  staff: User[];
+  staff: Omit<User, "monthlySalary">[];
   leaveRecords: LeaveRecord[];
 }) {
   const router = useRouter();

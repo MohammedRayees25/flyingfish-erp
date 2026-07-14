@@ -14,6 +14,7 @@ import {
   Share2,
   Heart,
   FileBarChart,
+  LineChart,
   Settings,
 } from "lucide-react";
 import type { Module } from "@/lib/permissions";
@@ -79,7 +80,6 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Finance",
     href: "/finance",
     icon: Wallet,
-    comingSoon: true,
   },
   {
     module: "reviews",
@@ -101,7 +101,12 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Reports",
     href: "/reports",
     icon: FileBarChart,
-    comingSoon: true,
+  },
+  {
+    module: "analytics",
+    label: "Analytics",
+    href: "/analytics",
+    icon: LineChart,
   },
   {
     module: "settings",

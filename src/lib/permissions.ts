@@ -15,6 +15,7 @@ export const MODULES = [
   "social",
   "crm",
   "reports",
+  "analytics",
   "settings",
 ] as const;
 
@@ -42,9 +43,10 @@ export const ROLE_PERMISSIONS: Record<UserRole, Module[]> = {
     "social",
     "crm",
     "reports",
+    "analytics",
   ],
   INSTRUCTOR: ["dashboard", "guests", "bookings", "diveLogs", "certifications"],
-  MARKETING: ["dashboard", "guests", "reviews", "social", "crm", "reports"],
+  MARKETING: ["dashboard", "guests", "reviews", "social", "crm", "reports", "analytics"],
   ACCOUNTANT: [
     "dashboard",
     "guests",
@@ -52,6 +54,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Module[]> = {
     "boatSharing",
     "freelancers",
     "reports",
+    "analytics",
   ],
 };
 

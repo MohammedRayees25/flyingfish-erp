@@ -45,7 +45,7 @@ export function DailyAttendance({
 }: {
   date: string;
   month: string;
-  staff: User[];
+  staff: Omit<User, "monthlySalary">[];
   attendance: Record<string, AttendanceStatus>;
 }) {
   const router = useRouter();

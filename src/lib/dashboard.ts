@@ -42,6 +42,12 @@ export async function getDashboardData() {
     outstandingPaymentGuests,
     activeSeason,
     seasonBookingsAgg,
+    todayExpenseAgg,
+    monthBookingsCount,
+    vendorOutstandingAgg,
+    staffSalaryBudget,
+    staffSalaryThisMonth,
+    pendingStaffSalaryAgg,
   ] = await Promise.all([
     prisma.booking.findMany({
       where: { date: { gte: todayStart, lte: todayEnd }, status: { in: ACTIVE_BOOKING_STATUSES } },
@@ -124,7 +130,7 @@ export async function getDashboardData() {
     prisma.season.findFirst({ where: { isActive: true } }),
     prisma.season.findFirst({ where: { isActive: true } }).then(async (season) => {
       if (!season) return null;
-      const [bookings, revenue] = await Promise.all([
+      const [bookings, revenue, expense] = await Promise.all([
         prisma.booking.count({
           where: { date: { gte: season.startDate, lte: season.endDate } },
         }),
@@ -135,8 +141,37 @@ export async function getDashboardData() {
           },
           _sum: { amount: true },
         }),
+        prisma.financeTransaction.aggregate({
+          where: {
+            type: "EXPENSE",
+            date: { gte: season.startDate, lte: season.endDate },
+          },
+          _sum: { amount: true },
+        }),
       ]);
-      return { bookings, revenue: Number(revenue._sum.amount ?? 0) };
+      return {
+        bookings,
+        revenue: Number(revenue._sum.amount ?? 0),
+        expense: Number(expense._sum.amount ?? 0),
+      };
+    }),
+    prisma.financeTransaction.aggregate({
+      where: { type: "EXPENSE", date: { gte: todayStart, lte: todayEnd } },
+      _sum: { amount: true },
+    }),
+    prisma.booking.count({
+      where: { date: { gte: monthStart, lte: monthEnd }, status: { in: ACTIVE_BOOKING_STATUSES } },
+    }),
+    prisma.boatSharingEntry.aggregate({ _sum: { outstandingAmount: true } }),
+    prisma.user.aggregate({ where: { isActive: true }, _sum: { monthlySalary: true } }),
+    prisma.staffSalaryPayment.aggregate({
+      where: { status: "PAID", month: format(now, "yyyy-MM") },
+      _sum: { amount: true },
+    }),
+    prisma.staffSalaryPayment.aggregate({
+      where: { status: { in: ["PENDING", "PARTIAL"] } },
+      _sum: { amount: true },
+      _count: true,
     }),
   ]);
 
@@ -200,10 +235,19 @@ export async function getDashboardData() {
     { boatAmount: 0, tempoAmount: 0, outstanding: 0, totalGuests: 0, trips: 0 }
   );
 
+  const todayExpense = Number(todayExpenseAgg._sum.amount ?? 0);
+  const profitThisMonth = revenueThisMonth - expenseThisMonth;
+  const avgBookingValue = monthBookingsCount > 0 ? revenueThisMonth / monthBookingsCount : 0;
+  const staffSalaryBudgetAmount = Number(staffSalaryBudget._sum.monthlySalary ?? 0);
+  const staffSalaryPaidThisMonth = Number(staffSalaryThisMonth._sum.amount ?? 0);
+  const staffSalaryPendingAmount = Number(pendingStaffSalaryAgg._sum.amount ?? 0);
+
   return {
     today: {
       guests: todayGuestCount,
       revenue: Number(todayPayments._sum.amount ?? 0),
+      expense: todayExpense,
+      profit: Number(todayPayments._sum.amount ?? 0) - todayExpense,
       diveCount: todayDiveCount,
       boats: todayBoats,
       staffPresent: todayStaffPresent,
@@ -243,7 +287,7 @@ export async function getDashboardData() {
     finance: {
       revenueThisMonth,
       expenseThisMonth,
-      profitThisMonth: revenueThisMonth - expenseThisMonth,
+      profitThisMonth,
       revenueTrend,
     },
     topActivities: topActivitiesRaw.map((a) => ({
@@ -268,8 +312,27 @@ export async function getDashboardData() {
           endDate: activeSeason.endDate,
           bookings: seasonBookingsAgg?.bookings ?? 0,
           revenue: seasonBookingsAgg?.revenue ?? 0,
+          expense: seasonBookingsAgg?.expense ?? 0,
+          profit: (seasonBookingsAgg?.revenue ?? 0) - (seasonBookingsAgg?.expense ?? 0),
         }
       : null,
+    vendorPaymentsDue: Number(vendorOutstandingAgg._sum.outstandingAmount ?? 0),
+    staffCost: {
+      budgetThisMonth: staffSalaryBudgetAmount,
+      paidThisMonth: staffSalaryPaidThisMonth,
+      pendingAmount: staffSalaryPendingAmount,
+      pendingCount: pendingStaffSalaryAgg._count,
+    },
+    financialKpis: {
+      profitMarginThisMonth: revenueThisMonth > 0 ? (profitThisMonth / revenueThisMonth) * 100 : 0,
+      avgBookingValue,
+      cashFlowThisMonth: profitThisMonth,
+      outstandingTotal:
+        Number(pendingPayments._sum.amount ?? 0) +
+        Number(pendingFreelancerPayments._sum.amount ?? 0) +
+        staffSalaryPendingAmount +
+        Number(vendorOutstandingAgg._sum.outstandingAmount ?? 0),
+    },
   };
 }
 

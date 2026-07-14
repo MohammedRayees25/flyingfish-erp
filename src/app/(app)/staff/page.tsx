@@ -32,14 +32,18 @@ export default async function StaffPage({
   const monthEnd = endOfMonth(monthStart);
 
   const [staff, attendanceForDate, monthAttendance, leaveRecords] = await Promise.all([
-    prisma.user.findMany({ where: { isActive: true }, orderBy: { fullName: "asc" } }),
+    prisma.user.findMany({
+      where: { isActive: true },
+      orderBy: { fullName: "asc" },
+      omit: { monthlySalary: true },
+    }),
     prisma.staffAttendance.findMany({ where: { date: toDateOnly(dateStr) } }),
     prisma.staffAttendance.findMany({
       where: { date: { gte: monthStart, lte: monthEnd } },
     }),
     prisma.staffAttendance.findMany({
       where: { status: "LEAVE", date: { gte: monthStart, lte: monthEnd } },
-      include: { user: true },
+      include: { user: { omit: { monthlySalary: true } } },
       orderBy: { date: "desc" },
     }),
   ]);

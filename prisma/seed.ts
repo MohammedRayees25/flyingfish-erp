@@ -57,13 +57,13 @@ async function main() {
   // instructor/staff references.
   // ---------------------------------------------------------------------
   const users = [
-    { id: "11111111-1111-4111-8111-111111111101", email: "asha@flyingfish.in", fullName: "Asha Kapoor", role: UserRole.SUPER_ADMIN },
-    { id: "11111111-1111-4111-8111-111111111102", email: "rohan@flyingfish.in", fullName: "Rohan Mehta", role: UserRole.FOUNDER },
-    { id: "11111111-1111-4111-8111-111111111103", email: "priya@flyingfish.in", fullName: "Priya Nair", role: UserRole.MANAGER },
-    { id: "11111111-1111-4111-8111-111111111104", email: "diego@flyingfish.in", fullName: "Diego Alves", role: UserRole.INSTRUCTOR },
-    { id: "11111111-1111-4111-8111-111111111105", email: "sana@flyingfish.in", fullName: "Sana Fernandes", role: UserRole.INSTRUCTOR },
-    { id: "11111111-1111-4111-8111-111111111106", email: "karan@flyingfish.in", fullName: "Karan Shah", role: UserRole.MARKETING },
-    { id: "11111111-1111-4111-8111-111111111107", email: "meera@flyingfish.in", fullName: "Meera Iyer", role: UserRole.ACCOUNTANT },
+    { id: "11111111-1111-4111-8111-111111111101", email: "asha@flyingfish.in", fullName: "Asha Kapoor", role: UserRole.SUPER_ADMIN, monthlySalary: 0 },
+    { id: "11111111-1111-4111-8111-111111111102", email: "rohan@flyingfish.in", fullName: "Rohan Mehta", role: UserRole.FOUNDER, monthlySalary: 0 },
+    { id: "11111111-1111-4111-8111-111111111103", email: "priya@flyingfish.in", fullName: "Priya Nair", role: UserRole.MANAGER, monthlySalary: 45000 },
+    { id: "11111111-1111-4111-8111-111111111104", email: "diego@flyingfish.in", fullName: "Diego Alves", role: UserRole.INSTRUCTOR, monthlySalary: 35000 },
+    { id: "11111111-1111-4111-8111-111111111105", email: "sana@flyingfish.in", fullName: "Sana Fernandes", role: UserRole.INSTRUCTOR, monthlySalary: 35000 },
+    { id: "11111111-1111-4111-8111-111111111106", email: "karan@flyingfish.in", fullName: "Karan Shah", role: UserRole.MARKETING, monthlySalary: 30000 },
+    { id: "11111111-1111-4111-8111-111111111107", email: "meera@flyingfish.in", fullName: "Meera Iyer", role: UserRole.ACCOUNTANT, monthlySalary: 32000 },
   ];
   for (const u of users) {
     await prisma.user.upsert({ where: { id: u.id }, update: u, create: u });
@@ -532,36 +532,76 @@ async function main() {
   }
 
   // ---------------------------------------------------------------------
-  // Finance transactions (last 45 days) — drives the revenue chart
+  // Finance transactions (last 90 days) — drives the dashboard trend,
+  // finance module P&L and the analytics 90-day trend chart
   // ---------------------------------------------------------------------
   const expenseCategories = Object.values(ExpenseCategory);
   const revenueCategories = Object.values(RevenueCategory);
-  for (let d = 0; d < 45; d++) {
+  type FinanceRow = {
+    type: TransactionType;
+    revenueCategory: RevenueCategory | null;
+    expenseCategory: ExpenseCategory | null;
+    amount: number;
+    date: Date;
+    description: string;
+    createdById: string;
+  };
+  const financeRows: FinanceRow[] = [];
+  for (let d = 0; d < 90; d++) {
     const date = daysAgo(d);
     const isWeekend = date.getDay() === 0 || date.getDay() === 6;
     const revenueEntries = randInt(isWeekend ? 3 : 1, isWeekend ? 6 : 4);
     for (let r = 0; r < revenueEntries; r++) {
-      await prisma.financeTransaction.create({
-        data: {
-          type: TransactionType.REVENUE,
-          revenueCategory: pick(revenueCategories),
-          amount: randInt(1500, 14000),
-          date,
-          description: "Booking revenue",
-          createdById: pick(users).id,
-        },
+      financeRows.push({
+        type: TransactionType.REVENUE,
+        revenueCategory: pick(revenueCategories),
+        expenseCategory: null,
+        amount: randInt(1500, 14000),
+        date,
+        description: "Booking revenue",
+        createdById: pick(users).id,
       });
     }
     const expenseEntries = randInt(1, 3);
     for (let e = 0; e < expenseEntries; e++) {
-      await prisma.financeTransaction.create({
-        data: {
-          type: TransactionType.EXPENSE,
-          expenseCategory: pick(expenseCategories),
-          amount: randInt(800, 7000),
-          date,
-          description: "Operating expense",
-          createdById: pick(users).id,
+      financeRows.push({
+        type: TransactionType.EXPENSE,
+        revenueCategory: null,
+        expenseCategory: pick(expenseCategories),
+        amount: randInt(800, 7000),
+        date,
+        description: "Operating expense",
+        createdById: pick(users).id,
+      });
+    }
+  }
+  await prisma.financeTransaction.createMany({ data: financeRows });
+
+  // ---------------------------------------------------------------------
+  // Staff salary payments (last 4 months) — current month left
+  // pending/partial, earlier months marked paid, so the Finance > Staff
+  // Salary tab and the Staff Cost Summary dashboard widget both have
+  // realistic paid-vs-outstanding data.
+  // ---------------------------------------------------------------------
+  const salariedUsers = users.filter((u) => u.monthlySalary > 0);
+  const seedNow = new Date();
+  for (let m = 3; m >= 0; m--) {
+    const monthDate = new Date(seedNow.getFullYear(), seedNow.getMonth() - m, 1);
+    const month = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, "0")}`;
+    const isCurrentMonth = m === 0;
+    for (const u of salariedUsers) {
+      const status = isCurrentMonth
+        ? pick([PaymentStatus.PENDING, PaymentStatus.PARTIAL])
+        : PaymentStatus.PAID;
+      await prisma.staffSalaryPayment.upsert({
+        where: { userId_month: { userId: u.id, month } },
+        update: {},
+        create: {
+          userId: u.id,
+          month,
+          amount: u.monthlySalary,
+          status,
+          paidAt: status === PaymentStatus.PAID ? monthDate : null,
         },
       });
     }

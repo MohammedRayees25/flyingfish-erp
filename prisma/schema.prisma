@@ -196,15 +196,16 @@ enum VendorPaymentStatus {
 // ---------------------------------------------------------------------------
 
 model User {
-  id        String   @id @db.Uuid
-  email     String   @unique
-  fullName  String
-  phone     String?
-  role      UserRole @default(INSTRUCTOR)
-  avatarUrl String?
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String   @id @db.Uuid
+  email         String   @unique
+  fullName      String
+  phone         String?
+  role          UserRole @default(INSTRUCTOR)
+  avatarUrl     String?
+  isActive      Boolean  @default(true)
+  monthlySalary Decimal  @default(0) @db.Decimal(10, 2)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   bookingsAsInstructor Booking[]            @relation("BookingInstructor")
   staffAttendance      StaffAttendance[]
@@ -214,6 +215,7 @@ model User {
   transactionsCreated  FinanceTransaction[] @relation("TransactionCreatedBy")
   reviewsMentioned     GoogleReview[]       @relation("ReviewInstructorMentioned")
   notifications        Notification[]       @relation("NotificationTarget")
+  salaryPayments       StaffSalaryPayment[]
 
   @@map("users")
 }
@@ -413,6 +415,25 @@ model StaffAttendance {
   @@unique([userId, date])
   @@index([date])
   @@map("staff_attendance")
+}
+
+// One row per staff member per calendar month — the structured counterpart
+// to FreelancerPayment, distinct from the loose ExpenseCategory.SALARY
+// FinanceTransaction rows (which record the cash-flow side once paid).
+model StaffSalaryPayment {
+  id        String        @id @default(uuid()) @db.Uuid
+  userId    String        @db.Uuid
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  month     String
+  amount    Decimal       @db.Decimal(10, 2)
+  status    PaymentStatus @default(PENDING)
+  paidAt    DateTime?
+  notes     String?
+  createdAt DateTime      @default(now())
+
+  @@unique([userId, month])
+  @@index([month])
+  @@map("staff_salary_payments")
 }
 
 model Freelancer {

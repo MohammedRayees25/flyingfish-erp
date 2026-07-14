@@ -28,7 +28,7 @@ export function MonthlyOverview({
 }: {
   month: string;
   date: string;
-  staff: User[];
+  staff: Omit<User, "monthlySalary">[];
   records: StaffAttendance[];
 }) {
   const monthStart = startOfMonth(toDateOnly(`${month}-01`));
