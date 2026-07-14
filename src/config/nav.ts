@@ -34,28 +34,24 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Bookings",
     href: "/bookings",
     icon: CalendarCheck,
-    comingSoon: true,
   },
   {
     module: "boatSharing",
     label: "Boat Sharing",
     href: "/boat-sharing",
     icon: Ship,
-    comingSoon: true,
   },
   {
     module: "staff",
     label: "Staff Attendance",
     href: "/staff",
     icon: ClipboardList,
-    comingSoon: true,
   },
   {
     module: "freelancers",
     label: "Freelancers",
     href: "/freelancers",
     icon: UserCog,
-    comingSoon: true,
   },
   {
     module: "snacks",

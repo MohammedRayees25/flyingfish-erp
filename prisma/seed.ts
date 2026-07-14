@@ -21,6 +21,7 @@ import {
   VendorPaymentStatus,
   UserRole,
 } from "@prisma/client";
+import { computeBoatSharingSplits } from "@/lib/boat-sharing";
 
 const prisma = new PrismaClient();
 
@@ -97,6 +98,37 @@ async function main() {
   for (const b of boatDefs) {
     const existing = await prisma.boat.findFirst({ where: { name: b.name } });
     boats.push(existing ?? (await prisma.boat.create({ data: b })));
+  }
+
+  // ---------------------------------------------------------------------
+  // Activity rates (default prices, prefill new bookings)
+  // ---------------------------------------------------------------------
+  const activityRateDefs: Record<ActivityType, number> = {
+    BOAT_RIDE: 1200,
+    SHORT_DIVE: 3500,
+    LONG_DIVE: 5500,
+    LONG_DOUBLE_DIVE: 9500,
+    FUN_DIVE: 4500,
+    DIVE_GOA: 6000,
+    SEI: 6000,
+    FLYING_FISH: 4000,
+    PADI_OWD: 28000,
+    SSI_OWD: 27000,
+    PADI_AOW: 22000,
+    SSI_AOW: 21000,
+    EANX: 8000,
+    RESCUE: 25000,
+    REACT_RIGHT: 6000,
+    PPB: 5000,
+    ADVANCED_ADVENTURE: 20000,
+    WRECK_SPECIALTY: 12000,
+  };
+  for (const [activityType, price] of Object.entries(activityRateDefs)) {
+    await prisma.activityRate.upsert({
+      where: { activityType: activityType as ActivityType },
+      update: { price },
+      create: { activityType: activityType as ActivityType, price },
+    });
   }
 
   // ---------------------------------------------------------------------
@@ -282,7 +314,25 @@ async function main() {
     const total = ff + dg + sei;
     const boatAmount = randInt(4000, 9000);
     const tempoAmount = randInt(500, 1500);
-    const outstanding = Math.random() < 0.3 ? randInt(500, 3000) : 0;
+    const totalCost = boatAmount + tempoAmount;
+    const splits = computeBoatSharingSplits({
+      boatAmount,
+      tempoAmount,
+      ffGuests: ff,
+      dgGuests: dg,
+      seiGuests: sei,
+    });
+
+    // Vendor payment: nothing paid / partially paid / fully paid.
+    const vendorPaidFraction = pick([0, 0, 0.5, 1, 1]);
+    const vendorPaidAmount = Math.round(totalCost * vendorPaidFraction);
+    const outstandingAmount = totalCost - vendorPaidAmount;
+    const vendorPaymentStatus =
+      outstandingAmount <= 0
+        ? VendorPaymentStatus.PAID
+        : vendorPaidAmount > 0
+          ? VendorPaymentStatus.PARTIAL
+          : VendorPaymentStatus.PENDING;
 
     const entry = await prisma.boatSharingEntry.create({
       data: {
@@ -295,28 +345,36 @@ async function main() {
         dgGuests: dg,
         seiGuests: sei,
         totalGuests: total,
-        vendorPaymentStatus: outstanding > 0 ? VendorPaymentStatus.PARTIAL : VendorPaymentStatus.PAID,
-        outstandingAmount: outstanding,
+        vendorPaymentStatus,
+        outstandingAmount,
+        splits: {
+          create: splits.map((s) => {
+            const paidFraction = pick([0, 0, 0.5, 1, 1]);
+            const amountPaid = Math.round(s.amountDue * paidFraction);
+            return {
+              partyName: s.partyName,
+              guestCount: s.guestCount,
+              amountDue: s.amountDue,
+              amountPaid,
+              status:
+                amountPaid <= 0
+                  ? PaymentStatus.PENDING
+                  : amountPaid >= s.amountDue
+                    ? PaymentStatus.PAID
+                    : PaymentStatus.PARTIAL,
+            };
+          }),
+        },
       },
     });
 
-    const perGuestCost = (boatAmount + tempoAmount) / Math.max(total, 1);
-    const splitDefs = [
-      { partyName: "Flying Fish", guestCount: ff },
-      { partyName: "Dive Goa", guestCount: dg },
-      { partyName: "SEI", guestCount: sei },
-    ].filter((s) => s.guestCount > 0);
-
-    for (const s of splitDefs) {
-      const due = Math.round(perGuestCost * s.guestCount);
-      await prisma.boatSharingSplit.create({
+    if (vendorPaidAmount > 0) {
+      await prisma.boatVendorPayment.create({
         data: {
           entryId: entry.id,
-          partyName: s.partyName,
-          guestCount: s.guestCount,
-          amountDue: due,
-          amountPaid: outstanding > 0 && s.partyName === "Flying Fish" ? due - outstanding : due,
-          status: outstanding > 0 && s.partyName === "Flying Fish" ? PaymentStatus.PARTIAL : PaymentStatus.PAID,
+          amount: vendorPaidAmount,
+          method: pick(Object.values(PaymentMethod)),
+          paidAt: date,
         },
       });
     }

@@ -7,8 +7,9 @@ freelancers, finance, certifications, marketing and reporting.
 Built with Next.js 15 (App Router), TypeScript, Tailwind CSS, shadcn/ui, Prisma,
 Supabase (Postgres + Auth), React Hook Form, Zod, TanStack Table and Recharts.
 
-> **Status: Phase 1** — Authentication, database schema, the CEO dashboard and
-> Guest Management are implemented. See [Roadmap](#roadmap) for what's next.
+> **Status: Phase 2** — Authentication, database schema, the CEO dashboard, Guest
+> Management, Bookings (list + calendar), Boat Sharing, Staff Attendance and
+> Freelancer Management are implemented. See [Roadmap](#roadmap) for what's next.
 
 ## Tech stack
 
@@ -22,7 +23,7 @@ Supabase (Postgres + Auth), React Hook Form, Zod, TanStack Table and Recharts.
 | Forms | React Hook Form + Zod |
 | Tables | TanStack Table |
 | Charts | Recharts |
-| Reports | ExcelJS (Excel export), PDF export (later phase) |
+| Reports | ExcelJS (Excel export — boat sharing, staff attendance, freelancers), PDF export (later phase) |
 | Deployment | Vercel (app) + Supabase (database/auth) |
 
 ## Roles
@@ -45,17 +46,28 @@ src/
     (app)/                 Authenticated shell (sidebar + topbar)
       page.tsx             CEO dashboard
       guests/               Guest Management
-  actions/                 Server actions (auth, guests, search, ...)
+      bookings/             Booking Management (list + calendar)
+      boat-sharing/         Boat Sharing (entries, pending payments, reports)
+      staff/                 Staff Attendance (daily, monthly, leave)
+      freelancers/           Freelancer Management (profile, attendance, payments)
+    api/reports/            Excel export route handlers (boat sharing, staff, freelancers)
+  actions/                 Server actions (auth, guests, bookings, boat-sharing, staff-attendance, freelancers, ...)
   components/
     ui/                    Hand-vendored shadcn/ui primitives
     dashboard/              Dashboard widgets (stat cards, charts, ranked lists)
-    guests/                 Guest table + create/edit form
+    guests/                 Guest table, create/edit form, guest combobox
+    bookings/               Bookings table, calendar, create/edit form, activity rates
+    boat-sharing/           Entries table, create/edit form, payment dialogs, reports
+    staff/                  Daily/monthly attendance, leave management
+    freelancers/             Freelancer table, form, attendance & payments sections
   lib/
     supabase/               Browser / server / middleware / admin Supabase clients
     auth/                   requireUser / requireModuleAccess helpers
     prisma.ts               Prisma client singleton
     permissions.ts          Role → module access map
     dashboard.ts             Dashboard data aggregation queries
+    boat-sharing.ts          Automatic FF/DG/SEI cost-split calculator (shared client+server)
+    reference-data.ts        Instructor/boat/dive-site/activity-rate lookups
     validations/             Zod schemas
 ```
 
@@ -179,7 +191,6 @@ Visit `http://localhost:3000`.
 
 ## Roadmap
 
-- **Phase 2** — Bookings, Boat Sharing, Staff Attendance, Freelancers
 - **Phase 3** — Finance, Reports, Analytics
 - **Phase 4** — Social Media, CRM, Notifications, Excel Import
 - **Phase 5** — Testing, optimization, production deployment hardening

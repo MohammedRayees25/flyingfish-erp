@@ -31,6 +31,37 @@ export async function findDuplicateGuests(phone: string, fullName: string) {
   return candidates;
 }
 
+export type GuestOption = { id: string; fullName: string; phone: string };
+
+// Lightweight guest search for comboboxes (e.g. the booking form's guest
+// picker) — distinct from findDuplicateGuests, which is tuned for matching
+// near-duplicates rather than general lookup.
+export async function searchGuestsForSelect(query: string): Promise<GuestOption[]> {
+  await requireModuleAccess("guests");
+  const q = query.trim();
+  if (q.length < 1) {
+    const recent = await prisma.guest.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 8,
+      select: { id: true, fullName: true, phone: true },
+    });
+    return recent;
+  }
+
+  const guests = await prisma.guest.findMany({
+    where: {
+      OR: [
+        { fullName: { contains: q, mode: "insensitive" } },
+        { phone: { contains: q, mode: "insensitive" } },
+      ],
+    },
+    orderBy: { fullName: "asc" },
+    take: 10,
+    select: { id: true, fullName: true, phone: true },
+  });
+  return guests;
+}
+
 function fieldErrorsFrom(error: import("zod").ZodError) {
   const fieldErrors: Record<string, string> = {};
   for (const issue of error.issues) {
