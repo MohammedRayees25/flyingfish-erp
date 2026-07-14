@@ -85,7 +85,8 @@ Create a project at [supabase.com](https://supabase.com) (any region). You'll ne
 from **Project Settings → API**:
 
 - Project URL → `NEXT_PUBLIC_SUPABASE_URL`
-- `anon` public key → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `anon` public key (newer Supabase dashboards label this "Publishable key") →
+  `NEXT_PUBLIC_SUPABASE_ANON_KEY` (or `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` — both are read)
 - `service_role` key → `SUPABASE_SERVICE_ROLE_KEY` (server-only, never expose client-side)
 
 And from **Project Settings → Database → Connection string**:
