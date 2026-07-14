@@ -13,8 +13,13 @@ import {
   Star,
   Share2,
   TrendingUp,
+  TrendingDown,
   CalendarClock,
   AlertCircle,
+  Landmark,
+  PiggyBank,
+  Percent,
+  Truck,
 } from "lucide-react";
 import { getDashboardData } from "@/lib/dashboard";
 import { StatCard } from "@/components/dashboard/stat-card";
@@ -52,6 +57,17 @@ export default async function DashboardPage() {
           label="Today's Revenue"
           value={formatCurrencyINR(data.today.revenue)}
           icon={IndianRupee}
+        />
+        <StatCard
+          label="Today's Expenses"
+          value={formatCurrencyINR(data.today.expense)}
+          icon={TrendingDown}
+        />
+        <StatCard
+          label="Today's Profit"
+          value={formatCurrencyINR(data.today.profit)}
+          icon={TrendingUp}
+          tone={data.today.profit < 0 ? "critical" : "default"}
         />
         <StatCard label="Today's Dive Count" value={data.today.diveCount} icon={Waves} />
         <StatCard
@@ -116,6 +132,87 @@ export default async function DashboardPage() {
             icon={Award}
             tone="warning"
             className="flex-1"
+          />
+        </div>
+      </section>
+
+      {/* Financial overview */}
+      <section>
+        <h2 className="mb-3 text-sm font-semibold text-muted-foreground">Financial Overview</h2>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <StatCard
+            label="Monthly Revenue"
+            value={formatCurrencyINR(data.finance.revenueThisMonth)}
+            icon={IndianRupee}
+          />
+          <StatCard
+            label="Monthly Expenses"
+            value={formatCurrencyINR(data.finance.expenseThisMonth)}
+            icon={TrendingDown}
+          />
+          <StatCard
+            label="Monthly Profit"
+            value={formatCurrencyINR(data.finance.profitThisMonth)}
+            icon={TrendingUp}
+            tone={data.finance.profitThisMonth < 0 ? "critical" : "default"}
+          />
+          <StatCard
+            label="Profit Margin"
+            value={`${data.financialKpis.profitMarginThisMonth.toFixed(1)}%`}
+            subtext="This month"
+            icon={Percent}
+          />
+          <StatCard
+            label="Avg Booking Value"
+            value={formatCurrencyINR(data.financialKpis.avgBookingValue)}
+            subtext="This month"
+            icon={Landmark}
+          />
+          <StatCard
+            label="Season Revenue"
+            value={data.season ? formatCurrencyINR(data.season.revenue) : "—"}
+            subtext={data.season?.name}
+            icon={IndianRupee}
+          />
+          <StatCard
+            label="Season Expenses"
+            value={data.season ? formatCurrencyINR(data.season.expense) : "—"}
+            subtext={data.season?.name}
+            icon={TrendingDown}
+          />
+          <StatCard
+            label="Season Profit"
+            value={data.season ? formatCurrencyINR(data.season.profit) : "—"}
+            subtext={data.season?.name}
+            icon={TrendingUp}
+            tone={data.season && data.season.profit < 0 ? "critical" : "default"}
+          />
+          <StatCard
+            label="Vendor Payments Due"
+            value={formatCurrencyINR(data.vendorPaymentsDue)}
+            subtext="Boat & tempo, all-time"
+            icon={Truck}
+            tone={data.vendorPaymentsDue > 0 ? "warning" : "default"}
+          />
+          <StatCard
+            label="Staff Cost"
+            value={formatCurrencyINR(data.staffCost.budgetThisMonth)}
+            subtext={`Paid ${formatCurrencyINR(data.staffCost.paidThisMonth)} · Pending ${formatCurrencyINR(data.staffCost.pendingAmount)}`}
+            icon={UserCog}
+          />
+          <StatCard
+            label="Total Outstanding"
+            value={formatCurrencyINR(data.financialKpis.outstandingTotal)}
+            subtext="Guests, freelancers, staff & vendors"
+            icon={Wallet}
+            tone="warning"
+          />
+          <StatCard
+            label="Cash Flow"
+            value={formatCurrencyINR(data.financialKpis.cashFlowThisMonth)}
+            subtext="Net, this month"
+            icon={PiggyBank}
+            tone={data.financialKpis.cashFlowThisMonth < 0 ? "critical" : "default"}
           />
         </div>
       </section>
@@ -302,6 +399,20 @@ export default async function DashboardPage() {
                   <p className="text-muted-foreground">Revenue</p>
                   <p className="text-lg font-semibold">
                     {formatCurrencyINR(data.season.revenue)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Expenses</p>
+                  <p className="text-lg font-semibold">
+                    {formatCurrencyINR(data.season.expense)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Profit</p>
+                  <p
+                    className={`text-lg font-semibold ${data.season.profit < 0 ? "text-destructive" : ""}`}
+                  >
+                    {formatCurrencyINR(data.season.profit)}
                   </p>
                 </div>
                 <div className="col-span-2 text-xs text-muted-foreground">

@@ -21,6 +21,8 @@ import {
   VendorPaymentStatus,
   UserRole,
 } from "@prisma/client";
+import { computeBoatSharingSplits } from "@/lib/boat-sharing";
+import { ensureDefaultAdmin } from "@/lib/supabase/bootstrap-admin";
 
 const prisma = new PrismaClient();
 
@@ -55,13 +57,13 @@ async function main() {
   // instructor/staff references.
   // ---------------------------------------------------------------------
   const users = [
-    { id: "11111111-1111-4111-8111-111111111101", email: "asha@flyingfish.in", fullName: "Asha Kapoor", role: UserRole.SUPER_ADMIN },
-    { id: "11111111-1111-4111-8111-111111111102", email: "rohan@flyingfish.in", fullName: "Rohan Mehta", role: UserRole.FOUNDER },
-    { id: "11111111-1111-4111-8111-111111111103", email: "priya@flyingfish.in", fullName: "Priya Nair", role: UserRole.MANAGER },
-    { id: "11111111-1111-4111-8111-111111111104", email: "diego@flyingfish.in", fullName: "Diego Alves", role: UserRole.INSTRUCTOR },
-    { id: "11111111-1111-4111-8111-111111111105", email: "sana@flyingfish.in", fullName: "Sana Fernandes", role: UserRole.INSTRUCTOR },
-    { id: "11111111-1111-4111-8111-111111111106", email: "karan@flyingfish.in", fullName: "Karan Shah", role: UserRole.MARKETING },
-    { id: "11111111-1111-4111-8111-111111111107", email: "meera@flyingfish.in", fullName: "Meera Iyer", role: UserRole.ACCOUNTANT },
+    { id: "11111111-1111-4111-8111-111111111101", email: "asha@flyingfish.in", fullName: "Asha Kapoor", role: UserRole.SUPER_ADMIN, monthlySalary: 0 },
+    { id: "11111111-1111-4111-8111-111111111102", email: "rohan@flyingfish.in", fullName: "Rohan Mehta", role: UserRole.FOUNDER, monthlySalary: 0 },
+    { id: "11111111-1111-4111-8111-111111111103", email: "priya@flyingfish.in", fullName: "Priya Nair", role: UserRole.MANAGER, monthlySalary: 45000 },
+    { id: "11111111-1111-4111-8111-111111111104", email: "diego@flyingfish.in", fullName: "Diego Alves", role: UserRole.INSTRUCTOR, monthlySalary: 35000 },
+    { id: "11111111-1111-4111-8111-111111111105", email: "sana@flyingfish.in", fullName: "Sana Fernandes", role: UserRole.INSTRUCTOR, monthlySalary: 35000 },
+    { id: "11111111-1111-4111-8111-111111111106", email: "karan@flyingfish.in", fullName: "Karan Shah", role: UserRole.MARKETING, monthlySalary: 30000 },
+    { id: "11111111-1111-4111-8111-111111111107", email: "meera@flyingfish.in", fullName: "Meera Iyer", role: UserRole.ACCOUNTANT, monthlySalary: 32000 },
   ];
   for (const u of users) {
     await prisma.user.upsert({ where: { id: u.id }, update: u, create: u });
@@ -97,6 +99,37 @@ async function main() {
   for (const b of boatDefs) {
     const existing = await prisma.boat.findFirst({ where: { name: b.name } });
     boats.push(existing ?? (await prisma.boat.create({ data: b })));
+  }
+
+  // ---------------------------------------------------------------------
+  // Activity rates (default prices, prefill new bookings)
+  // ---------------------------------------------------------------------
+  const activityRateDefs: Record<ActivityType, number> = {
+    BOAT_RIDE: 1200,
+    SHORT_DIVE: 3500,
+    LONG_DIVE: 5500,
+    LONG_DOUBLE_DIVE: 9500,
+    FUN_DIVE: 4500,
+    DIVE_GOA: 6000,
+    SEI: 6000,
+    FLYING_FISH: 4000,
+    PADI_OWD: 28000,
+    SSI_OWD: 27000,
+    PADI_AOW: 22000,
+    SSI_AOW: 21000,
+    EANX: 8000,
+    RESCUE: 25000,
+    REACT_RIGHT: 6000,
+    PPB: 5000,
+    ADVANCED_ADVENTURE: 20000,
+    WRECK_SPECIALTY: 12000,
+  };
+  for (const [activityType, price] of Object.entries(activityRateDefs)) {
+    await prisma.activityRate.upsert({
+      where: { activityType: activityType as ActivityType },
+      update: { price },
+      create: { activityType: activityType as ActivityType, price },
+    });
   }
 
   // ---------------------------------------------------------------------
@@ -282,7 +315,25 @@ async function main() {
     const total = ff + dg + sei;
     const boatAmount = randInt(4000, 9000);
     const tempoAmount = randInt(500, 1500);
-    const outstanding = Math.random() < 0.3 ? randInt(500, 3000) : 0;
+    const totalCost = boatAmount + tempoAmount;
+    const splits = computeBoatSharingSplits({
+      boatAmount,
+      tempoAmount,
+      ffGuests: ff,
+      dgGuests: dg,
+      seiGuests: sei,
+    });
+
+    // Vendor payment: nothing paid / partially paid / fully paid.
+    const vendorPaidFraction = pick([0, 0, 0.5, 1, 1]);
+    const vendorPaidAmount = Math.round(totalCost * vendorPaidFraction);
+    const outstandingAmount = totalCost - vendorPaidAmount;
+    const vendorPaymentStatus =
+      outstandingAmount <= 0
+        ? VendorPaymentStatus.PAID
+        : vendorPaidAmount > 0
+          ? VendorPaymentStatus.PARTIAL
+          : VendorPaymentStatus.PENDING;
 
     const entry = await prisma.boatSharingEntry.create({
       data: {
@@ -295,28 +346,36 @@ async function main() {
         dgGuests: dg,
         seiGuests: sei,
         totalGuests: total,
-        vendorPaymentStatus: outstanding > 0 ? VendorPaymentStatus.PARTIAL : VendorPaymentStatus.PAID,
-        outstandingAmount: outstanding,
+        vendorPaymentStatus,
+        outstandingAmount,
+        splits: {
+          create: splits.map((s) => {
+            const paidFraction = pick([0, 0, 0.5, 1, 1]);
+            const amountPaid = Math.round(s.amountDue * paidFraction);
+            return {
+              partyName: s.partyName,
+              guestCount: s.guestCount,
+              amountDue: s.amountDue,
+              amountPaid,
+              status:
+                amountPaid <= 0
+                  ? PaymentStatus.PENDING
+                  : amountPaid >= s.amountDue
+                    ? PaymentStatus.PAID
+                    : PaymentStatus.PARTIAL,
+            };
+          }),
+        },
       },
     });
 
-    const perGuestCost = (boatAmount + tempoAmount) / Math.max(total, 1);
-    const splitDefs = [
-      { partyName: "Flying Fish", guestCount: ff },
-      { partyName: "Dive Goa", guestCount: dg },
-      { partyName: "SEI", guestCount: sei },
-    ].filter((s) => s.guestCount > 0);
-
-    for (const s of splitDefs) {
-      const due = Math.round(perGuestCost * s.guestCount);
-      await prisma.boatSharingSplit.create({
+    if (vendorPaidAmount > 0) {
+      await prisma.boatVendorPayment.create({
         data: {
           entryId: entry.id,
-          partyName: s.partyName,
-          guestCount: s.guestCount,
-          amountDue: due,
-          amountPaid: outstanding > 0 && s.partyName === "Flying Fish" ? due - outstanding : due,
-          status: outstanding > 0 && s.partyName === "Flying Fish" ? PaymentStatus.PARTIAL : PaymentStatus.PAID,
+          amount: vendorPaidAmount,
+          method: pick(Object.values(PaymentMethod)),
+          paidAt: date,
         },
       });
     }
@@ -473,36 +532,76 @@ async function main() {
   }
 
   // ---------------------------------------------------------------------
-  // Finance transactions (last 45 days) — drives the revenue chart
+  // Finance transactions (last 90 days) — drives the dashboard trend,
+  // finance module P&L and the analytics 90-day trend chart
   // ---------------------------------------------------------------------
   const expenseCategories = Object.values(ExpenseCategory);
   const revenueCategories = Object.values(RevenueCategory);
-  for (let d = 0; d < 45; d++) {
+  type FinanceRow = {
+    type: TransactionType;
+    revenueCategory: RevenueCategory | null;
+    expenseCategory: ExpenseCategory | null;
+    amount: number;
+    date: Date;
+    description: string;
+    createdById: string;
+  };
+  const financeRows: FinanceRow[] = [];
+  for (let d = 0; d < 90; d++) {
     const date = daysAgo(d);
     const isWeekend = date.getDay() === 0 || date.getDay() === 6;
     const revenueEntries = randInt(isWeekend ? 3 : 1, isWeekend ? 6 : 4);
     for (let r = 0; r < revenueEntries; r++) {
-      await prisma.financeTransaction.create({
-        data: {
-          type: TransactionType.REVENUE,
-          revenueCategory: pick(revenueCategories),
-          amount: randInt(1500, 14000),
-          date,
-          description: "Booking revenue",
-          createdById: pick(users).id,
-        },
+      financeRows.push({
+        type: TransactionType.REVENUE,
+        revenueCategory: pick(revenueCategories),
+        expenseCategory: null,
+        amount: randInt(1500, 14000),
+        date,
+        description: "Booking revenue",
+        createdById: pick(users).id,
       });
     }
     const expenseEntries = randInt(1, 3);
     for (let e = 0; e < expenseEntries; e++) {
-      await prisma.financeTransaction.create({
-        data: {
-          type: TransactionType.EXPENSE,
-          expenseCategory: pick(expenseCategories),
-          amount: randInt(800, 7000),
-          date,
-          description: "Operating expense",
-          createdById: pick(users).id,
+      financeRows.push({
+        type: TransactionType.EXPENSE,
+        revenueCategory: null,
+        expenseCategory: pick(expenseCategories),
+        amount: randInt(800, 7000),
+        date,
+        description: "Operating expense",
+        createdById: pick(users).id,
+      });
+    }
+  }
+  await prisma.financeTransaction.createMany({ data: financeRows });
+
+  // ---------------------------------------------------------------------
+  // Staff salary payments (last 4 months) — current month left
+  // pending/partial, earlier months marked paid, so the Finance > Staff
+  // Salary tab and the Staff Cost Summary dashboard widget both have
+  // realistic paid-vs-outstanding data.
+  // ---------------------------------------------------------------------
+  const salariedUsers = users.filter((u) => u.monthlySalary > 0);
+  const seedNow = new Date();
+  for (let m = 3; m >= 0; m--) {
+    const monthDate = new Date(seedNow.getFullYear(), seedNow.getMonth() - m, 1);
+    const month = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, "0")}`;
+    const isCurrentMonth = m === 0;
+    for (const u of salariedUsers) {
+      const status = isCurrentMonth
+        ? pick([PaymentStatus.PENDING, PaymentStatus.PARTIAL])
+        : PaymentStatus.PAID;
+      await prisma.staffSalaryPayment.upsert({
+        where: { userId_month: { userId: u.id, month } },
+        update: {},
+        create: {
+          userId: u.id,
+          month,
+          amount: u.monthlySalary,
+          status,
+          paidAt: status === PaymentStatus.PAID ? monthDate : null,
         },
       });
     }
@@ -585,6 +684,23 @@ async function main() {
       isActive: true,
     },
   });
+
+  // ---------------------------------------------------------------------
+  // Default admin — always ensured, independent of the demo data above.
+  // Creates (or links) a real Supabase Auth account so there's always at
+  // least one working SUPER_ADMIN login after seeding. Skips cleanly if
+  // Supabase credentials aren't configured (e.g. local/offline seeding).
+  // ---------------------------------------------------------------------
+  const adminResult = await ensureDefaultAdmin();
+  if (adminResult.status === "skipped") {
+    console.log(`Default admin: skipped — ${adminResult.reason}`);
+  } else if (adminResult.status === "created") {
+    console.log(`Default admin: created ${adminResult.email}`);
+    console.log(`  Password: ${adminResult.password}`);
+    console.log("  Save this now — it will not be shown again.");
+  } else {
+    console.log(`Default admin: linked existing Supabase Auth account ${adminResult.email}`);
+  }
 
   console.log("Seed complete ✅");
 }

@@ -6,6 +6,9 @@ import type {
   CertificationLevel,
   CertificationStatus,
   AttendanceStatus,
+  ExpenseCategory,
+  RevenueCategory,
+  VendorPaymentStatus,
 } from "@prisma/client";
 
 export const ACTIVITY_LABELS: Record<ActivityType, string> = {
@@ -76,6 +79,31 @@ export const ATTENDANCE_STATUS_LABELS: Record<AttendanceStatus, string> = {
   HALF_DAY: "Half Day",
   LEAVE: "Leave",
   HOLIDAY: "Holiday",
+};
+
+export const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
+  BOAT: "Boat",
+  TEMPO: "Tempo",
+  FREELANCER: "Freelancer",
+  SNACKS: "Snacks",
+  SALARY: "Staff Salary",
+  MARKETING: "Marketing",
+  EQUIPMENT: "Equipment",
+  MAINTENANCE: "Maintenance",
+  OTHER: "Other",
+};
+
+export const REVENUE_CATEGORY_LABELS: Record<RevenueCategory, string> = {
+  BOOKING: "Booking",
+  COURSE: "Course",
+  MERCHANDISE: "Merchandise",
+  OTHER: "Other",
+};
+
+export const VENDOR_PAYMENT_STATUS_LABELS: Record<VendorPaymentStatus, string> = {
+  PENDING: "Pending",
+  PARTIAL: "Partial",
+  PAID: "Paid",
 };
 
 export function formatCurrencyINR(amount: number): string {
