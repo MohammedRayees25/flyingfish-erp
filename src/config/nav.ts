@@ -59,21 +59,18 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Novotel Snacks",
     href: "/snacks",
     icon: Cookie,
-    comingSoon: true,
   },
   {
     module: "diveLogs",
     label: "Dive Logs",
     href: "/dive-logs",
     icon: Waves,
-    comingSoon: true,
   },
   {
     module: "certifications",
     label: "Certifications",
     href: "/certifications",
     icon: Award,
-    comingSoon: true,
   },
   {
     module: "finance",
@@ -86,16 +83,14 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Google Reviews",
     href: "/reviews",
     icon: Star,
-    comingSoon: true,
   },
   {
     module: "social",
     label: "Social Media",
     href: "/social",
     icon: Share2,
-    comingSoon: true,
   },
-  { module: "crm", label: "CRM", href: "/crm", icon: Heart, comingSoon: true },
+  { module: "crm", label: "CRM", href: "/crm", icon: Heart },
   {
     module: "reports",
     label: "Reports",
@@ -113,6 +108,5 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Settings",
     href: "/settings",
     icon: Settings,
-    comingSoon: true,
   },
 ];

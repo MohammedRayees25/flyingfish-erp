@@ -48,6 +48,9 @@ export async function getDashboardData() {
     staffSalaryBudget,
     staffSalaryThisMonth,
     pendingStaffSalaryAgg,
+    todaySnackConsumptionAgg,
+    activeSnackItems,
+    monthSnackPurchaseAgg,
   ] = await Promise.all([
     prisma.booking.findMany({
       where: { date: { gte: todayStart, lte: todayEnd }, status: { in: ACTIVE_BOOKING_STATUSES } },
@@ -173,6 +176,18 @@ export async function getDashboardData() {
       _sum: { amount: true },
       _count: true,
     }),
+    prisma.snackConsumption.aggregate({
+      where: { date: { gte: todayStart, lte: todayEnd } },
+      _sum: { quantity: true },
+    }),
+    prisma.snackItem.findMany({
+      where: { isActive: true },
+      select: { currentStock: true, costPerUnit: true, reorderLevel: true },
+    }),
+    prisma.snackPurchase.aggregate({
+      where: { date: { gte: monthStart, lte: monthEnd } },
+      _sum: { totalCost: true },
+    }),
   ]);
 
   const diveSiteIds = topDiveSitesRaw
@@ -241,6 +256,14 @@ export async function getDashboardData() {
   const staffSalaryBudgetAmount = Number(staffSalaryBudget._sum.monthlySalary ?? 0);
   const staffSalaryPaidThisMonth = Number(staffSalaryThisMonth._sum.amount ?? 0);
   const staffSalaryPendingAmount = Number(pendingStaffSalaryAgg._sum.amount ?? 0);
+
+  const snackStockValue = activeSnackItems.reduce(
+    (sum, item) => sum + item.currentStock * Number(item.costPerUnit),
+    0
+  );
+  const snackLowStockCount = activeSnackItems.filter(
+    (item) => item.currentStock <= item.reorderLevel
+  ).length;
 
   return {
     today: {
@@ -332,6 +355,12 @@ export async function getDashboardData() {
         Number(pendingFreelancerPayments._sum.amount ?? 0) +
         staffSalaryPendingAmount +
         Number(vendorOutstandingAgg._sum.outstandingAmount ?? 0),
+    },
+    snacks: {
+      todayConsumption: todaySnackConsumptionAgg._sum.quantity ?? 0,
+      stockValue: snackStockValue,
+      lowStockCount: snackLowStockCount,
+      monthlyCost: Number(monthSnackPurchaseAgg._sum.totalCost ?? 0),
     },
   };
 }

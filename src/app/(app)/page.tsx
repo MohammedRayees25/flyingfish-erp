@@ -20,6 +20,8 @@ import {
   PiggyBank,
   Percent,
   Truck,
+  Package,
+  AlertTriangle,
 } from "lucide-react";
 import { getDashboardData } from "@/lib/dashboard";
 import { StatCard } from "@/components/dashboard/stat-card";
@@ -213,6 +215,38 @@ export default async function DashboardPage() {
             subtext="Net, this month"
             icon={PiggyBank}
             tone={data.financialKpis.cashFlowThisMonth < 0 ? "critical" : "default"}
+          />
+        </div>
+      </section>
+
+      {/* Novotel Snacks */}
+      <section>
+        <h2 className="mb-3 text-sm font-semibold text-muted-foreground">Novotel Snacks</h2>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <StatCard
+            label="Today's Snacks"
+            value={data.snacks.todayConsumption}
+            subtext="Units consumed"
+            icon={Cookie}
+          />
+          <StatCard
+            label="Stock Value"
+            value={formatCurrencyINR(data.snacks.stockValue)}
+            subtext="Current inventory"
+            icon={Package}
+          />
+          <StatCard
+            label="Low Stock"
+            value={data.snacks.lowStockCount}
+            subtext="Items at/below reorder level"
+            icon={AlertTriangle}
+            tone={data.snacks.lowStockCount > 0 ? "warning" : "default"}
+          />
+          <StatCard
+            label="Monthly Snack Cost"
+            value={formatCurrencyINR(data.snacks.monthlyCost)}
+            subtext="This month's purchases"
+            icon={Wallet}
           />
         </div>
       </section>
