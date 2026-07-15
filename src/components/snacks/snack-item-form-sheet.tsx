@@ -34,6 +34,7 @@ export type SnackItemScalar = {
   name: string;
   unit: string;
   costPerUnit: number;
+  currentStock: number;
   reorderLevel: number;
   isActive: boolean;
 };

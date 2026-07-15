@@ -6,10 +6,7 @@ import { z } from "zod";
 export const SOCIAL_PLATFORMS = ["INSTAGRAM", "FACEBOOK", "YOUTUBE"] as const;
 export type UiSocialPlatform = (typeof SOCIAL_PLATFORMS)[number];
 
-const nonNegativeInt = z
-  .number({ invalid_type_error: "Must be a number" })
-  .int("Must be a whole number")
-  .min(0, "Cannot be negative");
+const nonNegativeInt = z.number().int("Must be a whole number").min(0, "Cannot be negative");
 
 export const socialPostSchema = z.object({
   platform: z.enum(SOCIAL_PLATFORMS),
