@@ -21,19 +21,30 @@ export async function signIn(
     return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
   }
 
-  const supabase = await createClient();
+  let supabase: Awaited<ReturnType<typeof createClient>>;
+  try {
+    supabase = await createClient();
+  } catch (error) {
+    console.error("[signIn] Supabase client init failed:", error);
+    return { error: "Sign-in is temporarily unavailable. Please try again shortly." };
+  }
+
   const { data, error } = await supabase.auth.signInWithPassword(parsed.data);
 
   if (error) {
     return { error: "Invalid email or password" };
   }
 
-  let profile = await prisma.user.findUnique({
-    where: { id: data.user.id },
-  });
-
-  if (!profile) {
-    profile = await tryLinkDefaultAdmin(data.user.id, data.user.email);
+  let profile: Awaited<ReturnType<typeof prisma.user.findUnique>>;
+  try {
+    profile = await prisma.user.findUnique({ where: { id: data.user.id } });
+    if (!profile) {
+      profile = await tryLinkDefaultAdmin(data.user.id, data.user.email);
+    }
+  } catch (error) {
+    console.error("[signIn] database lookup failed:", error);
+    await supabase.auth.signOut();
+    return { error: "Sign-in is temporarily unavailable. Please try again shortly." };
   }
 
   if (!profile) {
@@ -76,7 +87,11 @@ async function tryLinkDefaultAdmin(authUserId: string, email: string | undefined
 }
 
 export async function signOut() {
-  const supabase = await createClient();
-  await supabase.auth.signOut();
+  try {
+    const supabase = await createClient();
+    await supabase.auth.signOut();
+  } catch (error) {
+    console.error("[signOut] failed:", error);
+  }
   redirect("/login");
 }

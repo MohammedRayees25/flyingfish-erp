@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { getSupabaseAnonKey, getSupabaseUrl } from "./env";
 
 const PUBLIC_PATHS = ["/login", "/auth/callback", "/auth/error"];
 
@@ -9,13 +10,20 @@ function isPublicPath(pathname: string) {
   );
 }
 
+// If Supabase env vars are missing/misconfigured, or the auth service is
+// unreachable, treat the request as unauthenticated instead of throwing —
+// an uncaught error here crashes every route (this middleware runs in
+// front of the whole app, including /login) with Next's generic
+// "Application error" page. Redirecting to /login (or letting /login
+// itself render) keeps the app usable and the failure visible/diagnosable
+// instead of an opaque 500.
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
+  const { pathname } = request.nextUrl;
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
+  let user = null;
+  try {
+    const supabase = createServerClient(getSupabaseUrl(), getSupabaseAnonKey(), {
       cookies: {
         getAll() {
           return request.cookies.getAll();
@@ -30,17 +38,17 @@ export async function updateSession(request: NextRequest) {
           );
         },
       },
-    }
-  );
+    });
 
-  // IMPORTANT: avoid writing logic between createServerClient and
-  // getUser() — it refreshes the session token and must run on every
-  // request that touches a protected route.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const { pathname } = request.nextUrl;
+    // IMPORTANT: avoid writing logic between createServerClient and
+    // getUser() — it refreshes the session token and must run on every
+    // request that touches a protected route.
+    const result = await supabase.auth.getUser();
+    user = result.data.user;
+  } catch (error) {
+    console.error("[middleware] Supabase auth check failed:", error);
+    if (isPublicPath(pathname)) return supabaseResponse;
+  }
 
   if (!user && !isPublicPath(pathname)) {
     const redirectUrl = request.nextUrl.clone();
