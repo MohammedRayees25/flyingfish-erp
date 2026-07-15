@@ -21,9 +21,9 @@ export const diveLogSchema = z
     weightsUsedKg: z.number().min(0, "Can't be negative").optional(),
     marineLifeSeen: z.string().trim().optional().or(z.literal("")),
     problems: z.string().trim().optional().or(z.literal("")),
-    photoUrls: z.array(z.string().trim().url("Enter a valid URL")).default([]),
+    photoUrls: z.array(z.string().trim().url("Enter a valid URL")),
     notes: z.string().trim().optional().or(z.literal("")),
-    guestIds: z.array(z.string().uuid()).default([]),
+    guestIds: z.array(z.string().uuid()),
   })
   .refine(
     (data) => !data.entryTime || !data.exitTime || data.exitTime > data.entryTime,
