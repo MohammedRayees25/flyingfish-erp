@@ -42,13 +42,13 @@ import {
 import { CertificationFormSheet } from "@/components/certifications/certification-form-sheet";
 import { deleteGuestCertification } from "@/actions/certifications";
 import { CERTIFICATION_STATUS_LABELS } from "@/lib/labels";
-import type { CertificationAgency, CertificationStatus } from "@prisma/client";
-
-export const CERTIFICATION_AGENCY_LABELS: Record<CertificationAgency, string> = {
-  PADI: "PADI",
-  SSI: "SSI",
-  OTHER: "Other",
-};
+import {
+  CERTIFICATION_AGENCY_LABELS,
+  type CertificationRow,
+  type CourseOption,
+  type InstructorOption,
+} from "@/components/certifications/types";
+import type { CertificationStatus } from "@prisma/client";
 
 const STATUS_BADGE_VARIANT: Record<
   CertificationStatus,
@@ -61,32 +61,7 @@ const STATUS_BADGE_VARIANT: Record<
   ISSUED: "success",
 };
 
-export type CertificationRow = {
-  id: string;
-  guestId: string;
-  guestName: string;
-  guestPhone: string;
-  courseId: string;
-  courseName: string;
-  agency: CertificationAgency;
-  instructorId: string | null;
-  instructorName: string | null;
-  status: CertificationStatus;
-  progress: number;
-  theoryCompletedAt: Date | null;
-  poolCompletedAt: Date | null;
-  openWaterDivesCompleted: number;
-  openWaterDivesRequired: number;
-  examPassedAt: Date | null;
-  certificateNumber: string | null;
-  startDate: Date | null;
-  completionDate: Date | null;
-  issueDate: Date | null;
-  notes: string | null;
-};
-
-export type CourseOption = { id: string; name: string; agency: CertificationAgency };
-export type InstructorOption = { id: string; fullName: string };
+export type { CertificationRow, CourseOption, InstructorOption };
 
 export function CertificationsTable({
   certifications,

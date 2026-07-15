@@ -31,18 +31,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { CourseFormSheet } from "@/components/certifications/course-form-sheet";
-import { CERTIFICATION_AGENCY_LABELS } from "@/components/certifications/certifications-table";
+import {
+  CERTIFICATION_AGENCY_LABELS,
+  type CertificationCourseRow,
+} from "@/components/certifications/types";
 import { deleteCertificationCourse } from "@/actions/certifications";
 import { formatCurrencyINR } from "@/lib/labels";
-import type { CertificationAgency } from "@prisma/client";
 
-export type CertificationCourseRow = {
-  id: string;
-  name: string;
-  agency: CertificationAgency;
-  track: string | null;
-  price: number;
-};
+export type { CertificationCourseRow };
 
 export function CoursesTable({ courses }: { courses: CertificationCourseRow[] }) {
   const router = useRouter();

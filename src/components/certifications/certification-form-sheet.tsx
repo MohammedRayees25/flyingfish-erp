@@ -46,7 +46,7 @@ import {
   type CertificationRow,
   type CourseOption,
   type InstructorOption,
-} from "@/components/certifications/certifications-table";
+} from "@/components/certifications/types";
 
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10);

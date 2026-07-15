@@ -37,8 +37,10 @@ import {
   FormControl,
   FormMessage,
 } from "@/components/ui/form";
-import { CERTIFICATION_AGENCY_LABELS } from "@/components/certifications/certifications-table";
-import type { CertificationCourseRow } from "@/components/certifications/courses-table";
+import {
+  CERTIFICATION_AGENCY_LABELS,
+  type CertificationCourseRow,
+} from "@/components/certifications/types";
 
 export function CourseFormSheet({
   mode,
