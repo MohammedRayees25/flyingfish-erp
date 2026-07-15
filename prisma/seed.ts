@@ -20,6 +20,7 @@ import {
   FollowUpStatus,
   VendorPaymentStatus,
   UserRole,
+  LeadStage,
 } from "@prisma/client";
 import { computeBoatSharingSplits } from "@/lib/boat-sharing";
 import { ensureDefaultAdmin } from "@/lib/supabase/bootstrap-admin";
@@ -136,20 +137,22 @@ async function main() {
   // Certification courses
   // ---------------------------------------------------------------------
   const courseDefs = [
-    { name: "Open Water Diver", agency: CertificationAgency.PADI, track: "Entry level" },
-    { name: "Advanced Open Water", agency: CertificationAgency.PADI, track: "Advanced" },
-    { name: "Rescue Diver", agency: CertificationAgency.PADI, track: "Rescue" },
-    { name: "Enriched Air (EANx)", agency: CertificationAgency.PADI, track: "Specialty" },
-    { name: "Open Water Diver", agency: CertificationAgency.SSI, track: "Entry level" },
-    { name: "Advanced Adventurer", agency: CertificationAgency.SSI, track: "Advanced" },
-    { name: "Stress & Rescue", agency: CertificationAgency.SSI, track: "Rescue" },
+    { name: "Open Water Diver", agency: CertificationAgency.PADI, track: "Entry level", price: 28000 },
+    { name: "Advanced Open Water", agency: CertificationAgency.PADI, track: "Advanced", price: 22000 },
+    { name: "Rescue Diver", agency: CertificationAgency.PADI, track: "Rescue", price: 25000 },
+    { name: "Enriched Air (EANx)", agency: CertificationAgency.PADI, track: "Specialty", price: 8000 },
+    { name: "Open Water Diver", agency: CertificationAgency.SSI, track: "Entry level", price: 27000 },
+    { name: "Advanced Adventurer", agency: CertificationAgency.SSI, track: "Advanced", price: 21000 },
+    { name: "Stress & Rescue", agency: CertificationAgency.SSI, track: "Rescue", price: 24000 },
+    { name: "Divemaster", agency: CertificationAgency.SSI, track: "Professional", price: 45000 },
+    { name: "Specialty Diver", agency: CertificationAgency.SSI, track: "Specialty", price: 9000 },
   ];
   const courses = [];
   for (const c of courseDefs) {
     courses.push(
       await prisma.certificationCourse.upsert({
         where: { name_agency: { name: c.name, agency: c.agency } },
-        update: {},
+        update: { price: c.price },
         create: c,
       })
     );
@@ -463,6 +466,57 @@ async function main() {
   }
 
   // ---------------------------------------------------------------------
+  // Snack inventory (items, purchases, consumption)
+  // ---------------------------------------------------------------------
+  const snackItemDefs = [
+    { name: "Water Bottle (500ml)", unit: "bottle", costPerUnit: 15, reorderLevel: 100 },
+    { name: "Snack Box", unit: "box", costPerUnit: 120, reorderLevel: 20 },
+    { name: "Buffet Tray", unit: "tray", costPerUnit: 350, reorderLevel: 5 },
+    { name: "Energy Bar", unit: "piece", costPerUnit: 40, reorderLevel: 30 },
+    { name: "Fruit Juice", unit: "bottle", costPerUnit: 35, reorderLevel: 40 },
+    { name: "Biscuit Pack", unit: "pack", costPerUnit: 25, reorderLevel: 25 },
+  ];
+  const snackItems = [];
+  for (const s of snackItemDefs) {
+    snackItems.push(
+      await prisma.snackItem.upsert({
+        where: { name: s.name },
+        update: {},
+        create: { ...s, currentStock: randInt(s.reorderLevel, s.reorderLevel * 4) },
+      })
+    );
+  }
+  for (let d = 0; d < 20; d++) {
+    const date = daysAgo(d);
+    if (d % 4 === 0) {
+      const item = pick(snackItems);
+      const quantity = randInt(20, 80);
+      await prisma.snackPurchase.create({
+        data: {
+          itemId: item.id,
+          date,
+          quantity,
+          unitCost: item.costPerUnit,
+          totalCost: Number(item.costPerUnit) * quantity,
+          vendor: pick(["Novotel Goa", "Local Supplier", "Goa Wholesale Mart"]),
+        },
+      });
+    }
+    for (let c = 0; c < randInt(1, 3); c++) {
+      const item = pick(snackItems);
+      await prisma.snackConsumption.create({
+        data: {
+          itemId: item.id,
+          date,
+          quantity: randInt(2, 15),
+          guestId: Math.random() < 0.4 ? pick(guests).id : null,
+          boatId: Math.random() < 0.5 ? pick(boats).id : null,
+        },
+      });
+    }
+  }
+
+  // ---------------------------------------------------------------------
   // Dive logs
   // ---------------------------------------------------------------------
   const currents = ["None", "Mild", "Moderate", "Strong"];
@@ -474,18 +528,35 @@ async function main() {
     "Nudibranchs, seahorses",
     "Groupers, snappers",
   ];
+  const cylinderTypes = ["Aluminium 80", "Steel 12L", "Aluminium 63"];
   for (let d = 0; d < 25; d++) {
-    await prisma.diveLog.create({
+    const date = daysAgo(d);
+    const entryHour = randInt(8, 14);
+    const diveLog = await prisma.diveLog.create({
       data: {
-        date: daysAgo(d),
+        date,
         diveSiteId: pick(diveSites).id,
+        boatId: pick(boats).id,
         visibility: randInt(4, 15),
         current: pick(currents),
         temperature: randInt(26, 30),
         weather: pick(weathers),
         marineLifeSeen: pick(marineLife),
         instructorId: pick(instructors).id,
+        entryTime: new Date(date.getFullYear(), date.getMonth(), date.getDate(), entryHour, randInt(0, 59)),
+        exitTime: new Date(date.getFullYear(), date.getMonth(), date.getDate(), entryHour, randInt(0, 59) + 40),
+        bottomTimeMin: randInt(25, 55),
+        maxDepth: randInt(8, 30),
+        equipmentUsed: "BCD, Regulator, Fins, Mask",
+        cylinderType: pick(cylinderTypes),
+        weightsUsedKg: randInt(2, 8),
+        problems: Math.random() < 0.1 ? "Minor ear equalization difficulty, resolved" : null,
       },
+    });
+    const diveGuests = pickSome(guests, randInt(1, 3));
+    await prisma.diveLogGuest.createMany({
+      data: diveGuests.map((g) => ({ diveLogId: diveLog.id, guestId: g.id })),
+      skipDuplicates: true,
     });
   }
 
@@ -512,21 +583,31 @@ async function main() {
     const status = isUpcoming
       ? pick([CertificationStatus.NOT_STARTED, CertificationStatus.IN_PROGRESS])
       : pick([CertificationStatus.COMPLETED, CertificationStatus.ISSUED, CertificationStatus.PENDING_CARD, CertificationStatus.IN_PROGRESS]);
+    const isDone = status === CertificationStatus.COMPLETED || status === CertificationStatus.ISSUED;
+    const openWaterDivesRequired = course.name === "Divemaster" ? 40 : 4;
 
     await prisma.guestCertification.create({
       data: {
         guestId: guest.id,
         courseId: course.id,
         instructorId: pick(instructors).id,
-        progress: status === CertificationStatus.ISSUED || status === CertificationStatus.COMPLETED ? 100 : randInt(10, 80),
+        progress: isDone ? 100 : randInt(10, 80),
         status,
+        theoryCompletedAt: status === CertificationStatus.NOT_STARTED ? null : daysAgo(randInt(20, 45)),
+        poolCompletedAt:
+          status === CertificationStatus.NOT_STARTED ? null : daysAgo(randInt(12, 30)),
+        openWaterDivesCompleted: isDone
+          ? openWaterDivesRequired
+          : status === CertificationStatus.IN_PROGRESS
+            ? randInt(1, openWaterDivesRequired - 1)
+            : 0,
+        openWaterDivesRequired,
+        examPassedAt: isDone ? daysAgo(randInt(2, 9)) : null,
         certificateNumber:
           status === CertificationStatus.ISSUED ? `${course.agency}-${randInt(100000, 999999)}` : null,
         startDate: isUpcoming ? daysFromNow(randInt(1, 12)) : daysAgo(randInt(10, 40)),
-        completionDate:
-          status === CertificationStatus.COMPLETED || status === CertificationStatus.ISSUED
-            ? daysAgo(randInt(1, 8))
-            : null,
+        completionDate: isDone ? daysAgo(randInt(1, 8)) : null,
+        issueDate: status === CertificationStatus.ISSUED ? daysAgo(randInt(0, 5)) : null,
       },
     });
   }
@@ -639,18 +720,44 @@ async function main() {
   const platforms = Object.values(SocialPlatform);
   for (let i = 0; i < 24; i++) {
     const views = randInt(200, 8000);
+    const isReel = Math.random() < 0.4;
     await prisma.socialMediaPost.create({
       data: {
         platform: pick(platforms),
         postDate: daysAgo(randInt(0, 30)),
         caption: "Another beautiful dive day at Flying Fish 🌊",
+        isReel,
         views,
         likes: Math.round(views * (Math.random() * 0.08 + 0.02)),
         comments: randInt(0, 40),
+        shares: randInt(0, 25),
+        saves: randInt(0, 30),
         reach: Math.round(views * (Math.random() * 0.6 + 0.8)),
         leadsGenerated: randInt(0, 12),
       },
     });
+  }
+
+  const trackedPlatforms: SocialPlatform[] = [
+    SocialPlatform.INSTAGRAM,
+    SocialPlatform.FACEBOOK,
+    SocialPlatform.YOUTUBE,
+  ];
+  const followerBaseline: Record<string, number> = {
+    INSTAGRAM: 4200,
+    FACEBOOK: 3100,
+    YOUTUBE: 850,
+  };
+  for (let m = 5; m >= 0; m--) {
+    const snapshotDate = daysAgo(m * 30);
+    for (const platform of trackedPlatforms) {
+      const growth = (5 - m) * randInt(40, 120);
+      await prisma.socialFollowerSnapshot.upsert({
+        where: { platform_date: { platform, date: snapshotDate } },
+        update: {},
+        create: { platform, date: snapshotDate, followers: followerBaseline[platform] + growth },
+      });
+    }
   }
 
   // ---------------------------------------------------------------------
@@ -667,6 +774,86 @@ async function main() {
         status: pick([FollowUpStatus.PENDING, FollowUpStatus.PENDING, FollowUpStatus.DONE]),
         assignedToId: pick(users).id,
       },
+    });
+  }
+
+  // ---------------------------------------------------------------------
+  // CRM leads (pipeline)
+  // ---------------------------------------------------------------------
+  const leadSources = ["Instagram", "Google", "Walk-in", "Referral", "Website", "WhatsApp"];
+  const leadFirstNames = ["Rohan", "Ananya", "Kabir", "Ishita", "Yash", "Meher", "Devika", "Farhan", "Tanvi", "Om"];
+  const leadLastNames = ["Kapoor", "Bansal", "Sethi", "Rao", "Chatterjee", "Menon", "Chawla", "Bhatt"];
+  const leadStages: LeadStage[] = [
+    LeadStage.NEW,
+    LeadStage.CONTACTED,
+    LeadStage.INTERESTED,
+    LeadStage.BOOKED,
+    LeadStage.COMPLETED,
+    LeadStage.LOST,
+  ];
+  const createdLeads: { id: string }[] = [];
+  for (let i = 0; i < 18; i++) {
+    const stage = leadStages[i % leadStages.length];
+    const isRepeatCustomer = Math.random() < 0.2;
+    const lead = await prisma.lead.create({
+      data: {
+        fullName: `${pick(leadFirstNames)} ${pick(leadLastNames)}`,
+        phone: `9${randInt(100000000, 999999999)}`,
+        email: Math.random() < 0.6 ? `lead${i}@example.com` : null,
+        source: pick(leadSources),
+        stage,
+        assignedToId: pick(users).id,
+        followUpAt:
+          stage === LeadStage.LOST || stage === LeadStage.COMPLETED
+            ? null
+            : daysFromNow(randInt(-1, 7)),
+        isRepeatCustomer,
+        guestId: stage === LeadStage.COMPLETED ? pick(guests).id : null,
+      },
+    });
+    createdLeads.push(lead);
+  }
+  // A couple of referral chains
+  if (createdLeads.length >= 4) {
+    await prisma.lead.update({
+      where: { id: createdLeads[1].id },
+      data: { referredById: createdLeads[0].id },
+    });
+    await prisma.lead.update({
+      where: { id: createdLeads[3].id },
+      data: { referredById: createdLeads[0].id },
+    });
+  }
+
+  // ---------------------------------------------------------------------
+  // Settings (company profile, rental pricing)
+  // ---------------------------------------------------------------------
+  const existingCompanySettings = await prisma.companySettings.findFirst();
+  if (!existingCompanySettings) {
+    await prisma.companySettings.create({
+      data: {
+        companyName: "Flying Fish Scuba School",
+        address: "Sinquerim Beach Road, Bardez, Goa 403515",
+        gstNumber: "30ABCDE1234F1Z5",
+        phone: "+91 98765 43210",
+        email: "info@flyingfish.in",
+      },
+    });
+  }
+
+  const rentalItemDefs = [
+    { name: "BCD", dailyRate: 500 },
+    { name: "Regulator", dailyRate: 500 },
+    { name: "Wetsuit", dailyRate: 300 },
+    { name: "Dive Computer", dailyRate: 400 },
+    { name: "Underwater Torch", dailyRate: 250 },
+    { name: "Camera (GoPro)", dailyRate: 800 },
+  ];
+  for (const r of rentalItemDefs) {
+    await prisma.rentalItem.upsert({
+      where: { name: r.name },
+      update: {},
+      create: r,
     });
   }
 
