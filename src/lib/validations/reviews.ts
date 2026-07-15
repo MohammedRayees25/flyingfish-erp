@@ -6,7 +6,7 @@ const SENTIMENTS = ["POSITIVE", "NEUTRAL", "NEGATIVE"] as const;
 export const reviewSchema = z.object({
   reviewerName: z.string().trim().min(2, "Reviewer name must be at least 2 characters"),
   guestId: z.string().uuid().optional().or(z.literal("")),
-  rating: z.coerce
+  rating: z
     .number()
     .int("Rating must be a whole number")
     .min(1, "Rating must be between 1 and 5")
