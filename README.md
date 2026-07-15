@@ -283,6 +283,31 @@ with P3005. Fix this once, in order:
 After baselining, keep applying future migrations the same way — `npm run db:deploy`
 run deliberately before/alongside a deploy, never inside the Vercel build.
 
+#### Repairing a drifted production database (all phases, one shot)
+
+If production has fallen out of sync with `prisma/schema.prisma` in ways smaller than a
+full baseline — individual Phase 2/3/4 tables or columns missing, e.g. runtime errors
+about `guest_certifications.openWaterDivesCompleted` or `snack_consumptions.date` not
+existing — run `prisma/sql/sync_production_to_schema.sql` in the Supabase SQL editor. It:
+
+- Creates every enum, table, index, and foreign key from the current schema with
+  `IF NOT EXISTS` guards, so it's a no-op wherever the database already matches.
+- Adds every column still missing from an already-existing table. A column that's
+  `NOT NULL` in the schema but has no `DEFAULT` is added nullable instead (with a
+  `NEEDS BACKFILL` comment) rather than failing or inventing data on tables that already
+  have rows — backfill real values, then tighten with `ALTER TABLE ... SET NOT NULL`
+  by hand.
+- Renames any legacy lowercase-folded column (e.g. `certificatenumber` left over from an
+  earlier unquoted, manual `ALTER TABLE`) to its correct camelCase name, preserving the
+  data, wherever the correct column doesn't already exist.
+- Ends with verification queries — missing tables, missing columns, and per-table row
+  counts — so you can confirm the result and that nothing was truncated.
+
+It contains no `DROP`, `TRUNCATE`, or other destructive statement, wraps everything in a
+single transaction, and is safe to run more than once. It's a one-off repair script, not
+a substitute for `prisma/migrations/*` — run `prisma/sql/check_migration_state.sql` first
+if you haven't already, to see what's actually missing before running this.
+
 ## Security notes
 
 - All application data access goes through Prisma using the trusted server-side
