@@ -7,9 +7,11 @@ freelancers, finance, certifications, marketing and reporting.
 Built with Next.js 15 (App Router), TypeScript, Tailwind CSS, shadcn/ui, Prisma,
 Supabase (Postgres + Auth), React Hook Form, Zod, TanStack Table and Recharts.
 
-> **Status: Phase 2** — Authentication, database schema, the CEO dashboard, Guest
-> Management, Bookings (list + calendar), Boat Sharing, Staff Attendance and
-> Freelancer Management are implemented. See [Roadmap](#roadmap) for what's next.
+> **Status: Phase 4 complete** — every planned module is implemented and live:
+> Authentication & RBAC, the CEO Dashboard, Guest Management, Bookings, Boat
+> Sharing, Staff Attendance, Freelancer Management, Finance, Reports, Analytics,
+> Novotel Snacks, Dive Logs, Certifications, Google Reviews, Social Media, CRM
+> and Settings. See [Roadmap](#roadmap) for post-launch hardening work.
 
 ## Tech stack
 
@@ -23,7 +25,7 @@ Supabase (Postgres + Auth), React Hook Form, Zod, TanStack Table and Recharts.
 | Forms | React Hook Form + Zod |
 | Tables | TanStack Table |
 | Charts | Recharts |
-| Reports | ExcelJS (Excel export — boat sharing, staff attendance, freelancers), PDF export (later phase) |
+| Reports | ExcelJS (Excel export across every module), PDF export (React-PDF — daily/weekly/monthly/seasonal/revenue/expense/profit/dive-log/certification reports) |
 | Deployment | Vercel (app) + Supabase (database/auth) |
 
 ## Roles
@@ -45,36 +47,46 @@ note below if it doesn't).
 prisma/
   schema.prisma          Normalized Postgres schema (all ERP modules)
   seed.ts                 Demo data seed script
-  sql/auth_trigger.sql    Supabase trigger: auth.users -> public.users
+  migrations/              Prisma Migrate history (one folder per phase)
+  sql/                     auth_trigger.sql, baselining/backfill scripts (see Deployment)
 src/
   app/
     login/                 Public login page
     (app)/                 Authenticated shell (sidebar + topbar)
-      page.tsx             CEO dashboard
+      page.tsx             CEO dashboard (live metrics across every module)
       guests/               Guest Management
       bookings/             Booking Management (list + calendar)
       boat-sharing/         Boat Sharing (entries, pending payments, reports)
       staff/                 Staff Attendance (daily, monthly, leave)
       freelancers/           Freelancer Management (profile, attendance, payments)
-    api/reports/            Excel export route handlers (boat sharing, staff, freelancers)
-  actions/                 Server actions (auth, guests, bookings, boat-sharing, staff-attendance, freelancers, ...)
+      finance/               Revenue/expense, P&L, cash flow, staff salary
+      reports/                Daily/weekly/monthly/seasonal/entity reports, PDF/Excel/CSV export
+      analytics/              Executive dashboards & trend charts
+      snacks/                 Novotel Snacks — inventory, purchases, consumption
+      dive-logs/              Dive Logs — full dive record, guests, photos
+      certifications/         PADI/SSI certification tracking & courses
+      reviews/                Google Reviews — ratings, sentiment, keyword analytics
+      social/                 Social Media — Instagram/Facebook/YouTube performance
+      crm/                    CRM — lead pipeline, kanban board, follow-ups
+      settings/               Company profile, users & roles, pricing, audit log
+    api/
+      reports/                Excel/PDF export route handlers, one per module
+      settings/export/        JSON data snapshot export
+  actions/                 Server actions, one file per module
   components/
     ui/                    Hand-vendored shadcn/ui primitives
     dashboard/              Dashboard widgets (stat cards, charts, ranked lists)
-    guests/                 Guest table, create/edit form, guest combobox
-    bookings/               Bookings table, calendar, create/edit form, activity rates
-    boat-sharing/           Entries table, create/edit form, payment dialogs, reports
-    staff/                  Daily/monthly attendance, leave management
-    freelancers/             Freelancer table, form, attendance & payments sections
+    <module>/                Module-specific tables, forms, charts (mirrors src/app/(app)/<module>)
   lib/
     supabase/               Browser / server / middleware / admin Supabase clients
     auth/                   requireUser / requireModuleAccess helpers
     prisma.ts               Prisma client singleton
     permissions.ts          Role → module access map
-    dashboard.ts             Dashboard data aggregation queries
+    dashboard.ts             Dashboard data aggregation queries (every module)
     boat-sharing.ts          Automatic FF/DG/SEI cost-split calculator (shared client+server)
     reference-data.ts        Instructor/boat/dive-site/activity-rate lookups
-    validations/             Zod schemas
+    reports/                 Shared ReportTable type + PDF/Excel/CSV renderers
+    validations/             Zod schemas, one file per module
 ```
 
 ## Getting started
@@ -284,9 +296,17 @@ run deliberately before/alongside a deploy, never inside the Vercel build.
 
 ## Roadmap
 
-- **Phase 3** — Finance, Reports, Analytics
-- **Phase 4** — Social Media, CRM, Notifications, Excel Import
-- **Phase 5** — Testing, optimization, production deployment hardening
+- **Phase 1** ✅ — Auth, database schema, CEO dashboard, Guest Management
+- **Phase 2** ✅ — Bookings, Boat Sharing, Staff Attendance, Freelancer Management
+- **Phase 3** ✅ — Finance, Reports, Analytics
+- **Phase 4** ✅ — Novotel Snacks, Dive Logs, Certifications, Google Reviews,
+  Social Media, CRM, Settings — every sidebar module is now implemented
+- **Phase 5** — Post-launch hardening: automated test coverage, file-storage
+  integration for real photo/logo uploads (dive log photos and the company
+  logo currently take a URL, since no object-storage bucket is provisioned
+  yet), email/WhatsApp notification delivery (Settings has the on/off
+  preference wired up; sending isn't implemented), broader audit-log coverage
+  across all mutations (currently logs Settings actions)
 
 Each phase builds on the schema already defined in `prisma/schema.prisma`, which
 models every module up front (bookings, boat sharing, staff/freelancer attendance
