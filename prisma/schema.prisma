@@ -191,6 +191,21 @@ enum VendorPaymentStatus {
   PAID
 }
 
+enum LeadStage {
+  NEW
+  CONTACTED
+  INTERESTED
+  BOOKED
+  COMPLETED
+  LOST
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+}
+
 // ---------------------------------------------------------------------------
 // Identity
 // ---------------------------------------------------------------------------
@@ -216,6 +231,8 @@ model User {
   reviewsMentioned     GoogleReview[]       @relation("ReviewInstructorMentioned")
   notifications        Notification[]       @relation("NotificationTarget")
   salaryPayments       StaffSalaryPayment[]
+  leadsAssigned        Lead[]               @relation("LeadAssignee")
+  auditLogs            AuditLog[]           @relation("AuditLogUser")
 
   @@map("users")
 }
@@ -243,11 +260,14 @@ model Guest {
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @updatedAt
 
-  bookings       Booking[]
-  payments       Payment[]
-  certifications GuestCertification[]
-  followUps      FollowUp[]
-  reviews        GoogleReview[]       @relation("ReviewGuest")
+  bookings          Booking[]
+  payments          Payment[]
+  certifications    GuestCertification[]
+  followUps         FollowUp[]
+  reviews           GoogleReview[]       @relation("ReviewGuest")
+  snackConsumptions SnackConsumption[]   @relation("SnackConsumptionGuest")
+  diveLogGuests     DiveLogGuest[]
+  leads             Lead[]
 
   @@index([phone])
   @@index([email])
@@ -282,6 +302,8 @@ model Boat {
 
   bookings           Booking[]
   boatSharingEntries BoatSharingEntry[]
+  snackConsumptions  SnackConsumption[]
+  diveLogs           DiveLog[]
 
   @@map("boats")
 }
@@ -483,6 +505,9 @@ model FreelancerPayment {
 // Novotel snacks
 // ---------------------------------------------------------------------------
 
+// Quick daily box/buffet counter shown on the ops dashboard. Distinct from
+// the inventory system below — this is a fast single-number-per-day log,
+// not tied to a specific item.
 model SnackLog {
   id            String   @id @default(uuid()) @db.Uuid
   date          DateTime @unique @db.Date
@@ -495,6 +520,59 @@ model SnackLog {
   @@map("snack_logs")
 }
 
+model SnackItem {
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String   @unique
+  unit         String
+  costPerUnit  Decimal  @default(0) @db.Decimal(10, 2)
+  currentStock Int      @default(0)
+  reorderLevel Int      @default(10)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  purchases    SnackPurchase[]
+  consumptions SnackConsumption[]
+
+  @@map("snack_items")
+}
+
+// Stock IN. Increments SnackItem.currentStock on create.
+model SnackPurchase {
+  id        String    @id @default(uuid()) @db.Uuid
+  itemId    String    @db.Uuid
+  item      SnackItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  date      DateTime  @db.Date
+  quantity  Int
+  unitCost  Decimal   @db.Decimal(10, 2)
+  totalCost Decimal   @db.Decimal(10, 2)
+  vendor    String?
+  notes     String?
+  createdAt DateTime  @default(now())
+
+  @@index([date])
+  @@map("snack_purchases")
+}
+
+// Stock OUT. Decrements SnackItem.currentStock on create. guestId/boatId
+// capture guest-wise and boat-wise allocation respectively (both optional
+// -- a consumption entry can be general, per-guest, or per-boat-trip).
+model SnackConsumption {
+  id        String    @id @default(uuid()) @db.Uuid
+  itemId    String    @db.Uuid
+  item      SnackItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  date      DateTime  @db.Date
+  quantity  Int
+  guestId   String?   @db.Uuid
+  guest     Guest?    @relation("SnackConsumptionGuest", fields: [guestId], references: [id])
+  boatId    String?   @db.Uuid
+  boat      Boat?     @relation(fields: [boatId], references: [id])
+  notes     String?
+  createdAt DateTime  @default(now())
+
+  @@index([date])
+  @@map("snack_consumptions")
+}
+
 // ---------------------------------------------------------------------------
 // Dive logs
 // ---------------------------------------------------------------------------
@@ -504,18 +582,43 @@ model DiveLog {
   date           DateTime  @db.Date
   diveSiteId     String?   @db.Uuid
   diveSite       DiveSite? @relation(fields: [diveSiteId], references: [id])
-  visibility     Int?
-  current        String?
-  temperature    Float?
-  weather        String?
-  marineLifeSeen String?
+  boatId         String?   @db.Uuid
+  boat           Boat?     @relation(fields: [boatId], references: [id])
   instructorId   String?   @db.Uuid
   instructor     User?     @relation("DiveLogInstructor", fields: [instructorId], references: [id])
+  entryTime      DateTime?
+  exitTime       DateTime?
+  bottomTimeMin  Int?
+  maxDepth       Float?
+  visibility     Int?
+  current        String?
+  weather        String?
+  temperature    Float?
+  equipmentUsed  String?
+  cylinderType   String?
+  weightsUsedKg  Float?
+  marineLifeSeen String?
+  problems       String?
+  photoUrls      String[]  @default([])
   notes          String?
   createdAt      DateTime  @default(now())
 
+  guests DiveLogGuest[]
+
   @@index([date])
   @@map("dive_logs")
+}
+
+// Guest-wise join -- a dive log can have multiple guests aboard.
+model DiveLogGuest {
+  id        String  @id @default(uuid()) @db.Uuid
+  diveLogId String  @db.Uuid
+  diveLog   DiveLog @relation(fields: [diveLogId], references: [id], onDelete: Cascade)
+  guestId   String  @db.Uuid
+  guest     Guest   @relation(fields: [guestId], references: [id], onDelete: Cascade)
+
+  @@unique([diveLogId, guestId])
+  @@map("dive_log_guests")
 }
 
 // ---------------------------------------------------------------------------
@@ -527,6 +630,7 @@ model CertificationCourse {
   name   String
   agency CertificationAgency
   track  String?
+  price  Decimal             @default(0) @db.Decimal(10, 2)
 
   certifications GuestCertification[]
 
@@ -535,21 +639,27 @@ model CertificationCourse {
 }
 
 model GuestCertification {
-  id                String              @id @default(uuid()) @db.Uuid
-  guestId           String              @db.Uuid
-  guest             Guest               @relation(fields: [guestId], references: [id], onDelete: Cascade)
-  courseId          String              @db.Uuid
-  course            CertificationCourse @relation(fields: [courseId], references: [id])
-  instructorId      String?             @db.Uuid
-  instructor        User?               @relation("CertificationInstructor", fields: [instructorId], references: [id])
-  progress          Int                 @default(0)
-  status            CertificationStatus @default(NOT_STARTED)
-  certificateNumber String?
-  startDate         DateTime?           @db.Date
-  completionDate    DateTime?           @db.Date
-  notes             String?
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  id                      String              @id @default(uuid()) @db.Uuid
+  guestId                 String              @db.Uuid
+  guest                   Guest               @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  courseId                String              @db.Uuid
+  course                  CertificationCourse @relation(fields: [courseId], references: [id])
+  instructorId            String?             @db.Uuid
+  instructor              User?               @relation("CertificationInstructor", fields: [instructorId], references: [id])
+  progress                Int                 @default(0)
+  status                  CertificationStatus @default(NOT_STARTED)
+  theoryCompletedAt       DateTime?           @db.Date
+  poolCompletedAt         DateTime?           @db.Date
+  openWaterDivesCompleted Int                 @default(0)
+  openWaterDivesRequired  Int                 @default(4)
+  examPassedAt            DateTime?           @db.Date
+  certificateNumber       String?
+  startDate               DateTime?           @db.Date
+  completionDate          DateTime?           @db.Date
+  issueDate               DateTime?           @db.Date
+  notes                   String?
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
 
   @@index([status])
   @@map("guest_certifications")
@@ -608,15 +718,30 @@ model SocialMediaPost {
   postDate       DateTime       @db.Date
   url            String?
   caption        String?
+  isReel         Boolean        @default(false)
   views          Int            @default(0)
   likes          Int            @default(0)
   comments       Int            @default(0)
+  shares         Int            @default(0)
+  saves          Int            @default(0)
   reach          Int            @default(0)
   leadsGenerated Int            @default(0)
   createdAt      DateTime       @default(now())
 
   @@index([platform, postDate])
   @@map("social_media_posts")
+}
+
+// Point-in-time follower count per platform, used for monthly growth charts
+// (follower count isn't a per-post metric, so it's tracked separately).
+model SocialFollowerSnapshot {
+  id        String         @id @default(uuid()) @db.Uuid
+  platform  SocialPlatform
+  date      DateTime       @db.Date
+  followers Int
+
+  @@unique([platform, date])
+  @@map("social_follower_snapshots")
 }
 
 // ---------------------------------------------------------------------------
@@ -639,6 +764,35 @@ model FollowUp {
   @@index([dueDate])
   @@index([status])
   @@map("follow_ups")
+}
+
+// Pipeline lead, distinct from Guest -- a Lead represents a prospect before
+// they've made a booking. Once they book, link guestId to the resulting
+// Guest record (created separately via the Guests module) and move the
+// stage to BOOKED/COMPLETED.
+model Lead {
+  id               String    @id @default(uuid()) @db.Uuid
+  fullName         String
+  phone            String
+  email            String?
+  source           String?
+  stage            LeadStage @default(NEW)
+  assignedToId     String?   @db.Uuid
+  assignedTo       User?     @relation("LeadAssignee", fields: [assignedToId], references: [id])
+  followUpAt       DateTime?
+  isRepeatCustomer Boolean   @default(false)
+  referredById     String?   @db.Uuid
+  referredBy       Lead?     @relation("LeadReferral", fields: [referredById], references: [id])
+  referrals        Lead[]    @relation("LeadReferral")
+  guestId          String?   @db.Uuid
+  guest            Guest?    @relation(fields: [guestId], references: [id])
+  notes            String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([stage])
+  @@index([followUpAt])
+  @@map("leads")
 }
 
 // ---------------------------------------------------------------------------
@@ -685,4 +839,50 @@ model DailyOpsLog {
   notes        String?
 
   @@map("daily_ops_logs")
+}
+
+// ---------------------------------------------------------------------------
+// Settings
+// ---------------------------------------------------------------------------
+
+// Singleton -- application code always reads/updates the first (only) row.
+model CompanySettings {
+  id                           String   @id @default(uuid()) @db.Uuid
+  companyName                  String   @default("Flying Fish Scuba School")
+  logoUrl                      String?
+  address                      String?
+  gstNumber                    String?
+  phone                        String?
+  email                        String?
+  emailNotificationsEnabled    Boolean  @default(true)
+  whatsappNotificationsEnabled Boolean  @default(true)
+  updatedAt                    DateTime @updatedAt
+
+  @@map("company_settings")
+}
+
+// Equipment rental pricing (Settings > Pricing > Rental). Activity pricing
+// already lives in ActivityRate; course pricing on CertificationCourse.price.
+model RentalItem {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @unique
+  dailyRate Decimal  @default(0) @db.Decimal(10, 2)
+  isActive  Boolean  @default(true)
+  updatedAt DateTime @updatedAt
+
+  @@map("rental_items")
+}
+
+model AuditLog {
+  id         String      @id @default(uuid()) @db.Uuid
+  userId     String?     @db.Uuid
+  user       User?       @relation("AuditLogUser", fields: [userId], references: [id])
+  action     AuditAction
+  entityType String
+  entityId   String?
+  summary    String
+  createdAt  DateTime    @default(now())
+
+  @@index([createdAt])
+  @@map("audit_logs")
 }
