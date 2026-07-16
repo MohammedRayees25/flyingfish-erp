@@ -6,6 +6,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DailyAttendance } from "@/components/staff/daily-attendance";
 import { MonthlyOverview } from "@/components/staff/monthly-overview";
 import { LeaveManagement } from "@/components/staff/leave-management";
+import { AttendanceFormSheet } from "@/components/staff/attendance-form-sheet";
+import { BulkAttendanceSheet } from "@/components/staff/bulk-attendance-sheet";
 
 export const metadata: Metadata = { title: "Staff Attendance" };
 
@@ -49,16 +51,22 @@ export default async function StaffPage({
   ]);
 
   const attendanceByUserId = Object.fromEntries(
-    attendanceForDate.map((a) => [a.userId, a.status])
+    attendanceForDate.map((a) => [a.userId, { status: a.status, notes: a.notes }])
   );
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Staff Attendance</h1>
-        <p className="text-sm text-muted-foreground">
-          Track daily attendance, monthly summaries and leave for active staff.
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Staff Attendance</h1>
+          <p className="text-sm text-muted-foreground">
+            Track daily attendance, monthly summaries and leave for active staff.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <BulkAttendanceSheet staff={staff} defaultDate={dateStr} />
+          <AttendanceFormSheet mode="create" staff={staff} defaultDate={dateStr} />
+        </div>
       </div>
 
       <Tabs defaultValue="daily">

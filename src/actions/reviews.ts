@@ -55,6 +55,7 @@ export async function createReview(input: ReviewInput): Promise<ReviewActionStat
   });
 
   revalidatePath("/reviews");
+  revalidatePath("/");
   return undefined;
 }
 
@@ -89,6 +90,7 @@ export async function updateReview(
   });
 
   revalidatePath("/reviews");
+  revalidatePath("/");
   return undefined;
 }
 
@@ -98,6 +100,7 @@ export async function deleteReview(reviewId: string): Promise<ReviewActionState>
   await prisma.googleReview.delete({ where: { id: reviewId } });
 
   revalidatePath("/reviews");
+  revalidatePath("/");
   return undefined;
 }
 

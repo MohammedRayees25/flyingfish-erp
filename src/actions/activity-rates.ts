@@ -18,5 +18,6 @@ export async function upsertActivityRate(activityType: ActivityType, price: numb
   });
 
   revalidatePath("/bookings");
+  revalidatePath("/settings");
   return undefined;
 }

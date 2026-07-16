@@ -6,11 +6,21 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 import type { AttendanceStatus, StaffAttendance, User } from "@prisma/client";
 import { leaveSchema, type LeaveInput } from "@/lib/validations/staff";
-import { bulkMarkLeave } from "@/actions/staff-attendance";
+import { bulkMarkLeave, deleteAttendance } from "@/actions/staff-attendance";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -59,11 +69,25 @@ export function LeaveManagement({
 }) {
   const router = useRouter();
   const [serverError, setServerError] = React.useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = React.useState<{ userId: string; date: string } | null>(
+    null
+  );
 
   const form = useForm<LeaveInput>({
     resolver: zodResolver(leaveSchema),
     defaultValues,
   });
+
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    const result = await deleteAttendance(deleteTarget.userId, deleteTarget.date);
+    setDeleteTarget(null);
+    if (result?.error) toast.error(result.error);
+    else {
+      toast.success("Leave record deleted");
+      router.refresh();
+    }
+  }
 
   async function onSubmit(data: LeaveInput) {
     setServerError(null);
@@ -191,12 +215,13 @@ export function LeaveManagement({
                   <TableHead>Staff</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead>Notes</TableHead>
+                  <TableHead className="w-10" />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {leaveRecords.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
                       No leave recorded this month.
                     </TableCell>
                   </TableRow>
@@ -208,6 +233,21 @@ export function LeaveManagement({
                       <TableCell className="text-muted-foreground">
                         {record.notes ?? "—"}
                       </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label="Delete leave record"
+                          onClick={() =>
+                            setDeleteTarget({
+                              userId: record.userId,
+                              date: format(record.date, "yyyy-MM-dd"),
+                            })
+                          }
+                        >
+                          <Trash2 className="size-4 text-destructive" />
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))
                 )}
@@ -216,6 +256,19 @@ export function LeaveManagement({
           </div>
         </CardContent>
       </Card>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this leave record?</AlertDialogTitle>
+            <AlertDialogDescription>This cannot be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
