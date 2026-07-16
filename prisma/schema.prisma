@@ -341,6 +341,12 @@ model Booking {
   @@index([date])
   @@index([status])
   @@index([guestId])
+  // Dashboard/reports/bookings-list all filter status IN (...) AND date
+  // BETWEEN ... together; this composite lets Postgres serve that combined
+  // filter with one index scan instead of a bitmap AND of two indexes.
+  @@index([status, date])
+  // Per-instructor booking lookups (analytics.ts) filter on both together.
+  @@index([instructorId, status])
   @@map("bookings")
 }
 
@@ -436,6 +442,9 @@ model StaffAttendance {
 
   @@unique([userId, date])
   @@index([date])
+  // Leave Management's monthly leave list and the dashboard's "present
+  // today" count both filter status + date range together.
+  @@index([status, date])
   @@map("staff_attendance")
 }
 
@@ -550,6 +559,9 @@ model SnackPurchase {
   createdAt DateTime  @default(now())
 
   @@index([date])
+  // Every purchase row is joined back to its item for display; Postgres
+  // doesn't auto-index foreign key columns.
+  @@index([itemId])
   @@map("snack_purchases")
 }
 
@@ -570,6 +582,9 @@ model SnackConsumption {
   createdAt DateTime  @default(now())
 
   @@index([date])
+  // Same as SnackPurchase.itemId -- always joined for display, never
+  // indexed automatically.
+  @@index([itemId])
   @@map("snack_consumptions")
 }
 
@@ -606,6 +621,13 @@ model DiveLog {
   guests DiveLogGuest[]
 
   @@index([date])
+  // The Dive Logs list page filters by any combination of these three FKs;
+  // Postgres can combine single-column indexes with a bitmap AND, and each
+  // one is also independently useful for the "most visited sites" /
+  // per-instructor groupBy queries.
+  @@index([diveSiteId])
+  @@index([instructorId])
+  @@index([boatId])
   @@map("dive_logs")
 }
 
@@ -687,6 +709,9 @@ model FinanceTransaction {
 
   @@index([date])
   @@index([type])
+  // By far the most common query shape across the dashboard, finance page,
+  // and reports: type (REVENUE/EXPENSE) filtered within a date range.
+  @@index([type, date])
   @@map("finance_transactions")
 }
 
@@ -709,6 +734,9 @@ model GoogleReview {
   createdAt             DateTime          @default(now())
 
   @@index([reviewDate])
+  // The dashboard's "pending replies" count and the Reviews page filter
+  // both query by replyStatus.
+  @@index([replyStatus])
   @@map("google_reviews")
 }
 
@@ -792,6 +820,9 @@ model Lead {
 
   @@index([stage])
   @@index([followUpAt])
+  // The CRM leads list filters by source and by assigned staff.
+  @@index([source])
+  @@index([assignedToId])
   @@map("leads")
 }
 

@@ -1,10 +1,11 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { format, eachDayOfInterval } from "date-fns";
 import type { AttendanceStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireModuleAccess } from "@/lib/auth/current-user";
+import { fieldErrorsFrom } from "@/lib/form-errors";
 import {
   markAttendanceSchema,
   leaveSchema,
@@ -25,14 +26,6 @@ const MAX_LEAVE_RANGE_DAYS = 60;
 function toDateOnly(input: string | Date): Date {
   const dateStr = typeof input === "string" ? input : format(input, "yyyy-MM-dd");
   return new Date(`${dateStr}T00:00:00.000Z`);
-}
-
-function fieldErrorsFrom(error: import("zod").ZodError) {
-  const fieldErrors: Record<string, string> = {};
-  for (const issue of error.issues) {
-    fieldErrors[String(issue.path[0])] = issue.message;
-  }
-  return fieldErrors;
 }
 
 export async function markAttendance(
@@ -63,6 +56,7 @@ export async function markAttendance(
 
   revalidatePath("/staff");
   revalidatePath("/");
+  revalidateTag("dashboard");
   return undefined;
 }
 
@@ -74,6 +68,7 @@ export async function deleteAttendance(userId: string, date: string): Promise<St
 
   revalidatePath("/staff");
   revalidatePath("/");
+  revalidateTag("dashboard");
   return undefined;
 }
 
@@ -104,6 +99,7 @@ export async function bulkMarkAttendance(input: BulkAttendanceInput): Promise<St
 
   revalidatePath("/staff");
   revalidatePath("/");
+  revalidateTag("dashboard");
   return undefined;
 }
 
@@ -145,5 +141,6 @@ export async function bulkMarkLeave(input: LeaveInput): Promise<StaffActionState
 
   revalidatePath("/staff");
   revalidatePath("/");
+  revalidateTag("dashboard");
   return undefined;
 }

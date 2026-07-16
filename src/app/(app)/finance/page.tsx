@@ -190,9 +190,20 @@ async function TransactionsList({
 
 async function SalaryTab() {
   const [staffRaw, paymentsRaw] = await Promise.all([
-    prisma.user.findMany({ where: { isActive: true }, orderBy: { fullName: "asc" } }),
+    prisma.user.findMany({
+      where: { isActive: true },
+      orderBy: { fullName: "asc" },
+      select: { id: true, fullName: true, role: true, monthlySalary: true },
+    }),
     prisma.staffSalaryPayment.findMany({
-      include: { user: { select: { fullName: true } } },
+      select: {
+        id: true,
+        month: true,
+        amount: true,
+        status: true,
+        paidAt: true,
+        user: { select: { fullName: true } },
+      },
       orderBy: [{ month: "desc" }, { createdAt: "desc" }],
       take: 60,
     }),

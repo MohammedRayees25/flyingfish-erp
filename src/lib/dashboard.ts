@@ -1,4 +1,5 @@
 import "server-only";
+import { unstable_cache } from "next/cache";
 import {
   startOfDay,
   endOfDay,
@@ -9,13 +10,22 @@ import {
   addDays,
 } from "date-fns";
 import { prisma } from "@/lib/prisma";
+import { recordDashboardCacheMiss } from "@/lib/perf-metrics";
 import type { ActivityType, BookingStatus } from "@prisma/client";
 
 const NON_DIVE_ACTIVITIES: ActivityType[] = ["BOAT_RIDE"];
 const ACTIVE_BOOKING_STATUSES: BookingStatus[] = ["PENDING", "CONFIRMED", "COMPLETED"];
 const PENDING_CERT_STATUSES = ["NOT_STARTED", "IN_PROGRESS", "PENDING_CARD"] as const;
 
-export async function getDashboardData() {
+// The "current season" (if any) determines the date range for the
+// season-to-date aggregates below, so it has to be known before those
+// queries can be built. This is a genuine data dependency, not something
+// that can be flattened into the main Promise.all -- but everything else
+// that depends on it (the season-scoped booking count + revenue/expense
+// aggregates) still runs inside that same big parallel batch, not as a
+// separate sequential round trip per query.
+async function computeDashboardData() {
+  recordDashboardCacheMiss();
   const now = new Date();
   const todayStart = startOfDay(now);
   const todayEnd = endOfDay(now);
@@ -23,11 +33,14 @@ export async function getDashboardData() {
   const monthEnd = endOfMonth(now);
   const trendStart = startOfDay(subDays(now, 29));
 
+  const activeSeason = await prisma.season.findFirst({ where: { isActive: true } });
+
   const [
     todayBookings,
     todayStaffPresent,
     todayOps,
     todaySnack,
+    todayPayments,
     pendingPayments,
     pendingFreelancerPayments,
     pendingCertificationsCount,
@@ -40,8 +53,9 @@ export async function getDashboardData() {
     topDiveSitesRaw,
     monthBoatSharing,
     outstandingPaymentGuests,
-    activeSeason,
-    seasonBookingsAgg,
+    seasonBookingsCount,
+    seasonRevenueAgg,
+    seasonExpenseAgg,
     todayExpenseAgg,
     monthBookingsCount,
     vendorOutstandingAgg,
@@ -54,13 +68,21 @@ export async function getDashboardData() {
   ] = await Promise.all([
     prisma.booking.findMany({
       where: { date: { gte: todayStart, lte: todayEnd }, status: { in: ACTIVE_BOOKING_STATUSES } },
-      include: { boat: true, guest: true, instructor: true },
+      select: {
+        activityType: true,
+        guestId: true,
+        boat: { select: { name: true } },
+      },
     }),
     prisma.staffAttendance.count({
       where: { date: { gte: todayStart, lte: todayEnd }, status: "PRESENT" },
     }),
     prisma.dailyOpsLog.findUnique({ where: { date: todayStart } }),
     prisma.snackLog.findUnique({ where: { date: todayStart } }),
+    prisma.payment.aggregate({
+      where: { paidAt: { gte: todayStart, lte: todayEnd }, status: "PAID" },
+      _sum: { amount: true },
+    }),
     prisma.payment.aggregate({
       where: { status: { in: ["PENDING", "PARTIAL"] } },
       _sum: { amount: true },
@@ -79,7 +101,14 @@ export async function getDashboardData() {
         status: { in: ["NOT_STARTED", "IN_PROGRESS"] },
         startDate: { gte: todayStart, lte: addDays(now, 14) },
       },
-      include: { guest: true, course: true, instructor: true },
+      select: {
+        id: true,
+        startDate: true,
+        progress: true,
+        guest: { select: { fullName: true } },
+        course: { select: { name: true, agency: true } },
+        instructor: { select: { fullName: true } },
+      },
       orderBy: { startDate: "asc" },
       take: 6,
     }),
@@ -121,43 +150,44 @@ export async function getDashboardData() {
     }),
     prisma.boatSharingEntry.findMany({
       where: { date: { gte: monthStart, lte: monthEnd } },
-      include: { boat: true },
+      select: { boatAmount: true, tempoAmount: true, outstandingAmount: true, totalGuests: true },
     }),
     prisma.guest.findMany({
       where: { payments: { some: { status: { in: ["PENDING", "PARTIAL"] } } } },
-      include: {
-        payments: { where: { status: { in: ["PENDING", "PARTIAL"] } } },
+      select: {
+        id: true,
+        fullName: true,
+        phone: true,
+        payments: {
+          where: { status: { in: ["PENDING", "PARTIAL"] } },
+          select: { amount: true },
+        },
       },
       take: 6,
     }),
-    prisma.season.findFirst({ where: { isActive: true } }),
-    prisma.season.findFirst({ where: { isActive: true } }).then(async (season) => {
-      if (!season) return null;
-      const [bookings, revenue, expense] = await Promise.all([
-        prisma.booking.count({
-          where: { date: { gte: season.startDate, lte: season.endDate } },
-        }),
-        prisma.financeTransaction.aggregate({
+    activeSeason
+      ? prisma.booking.count({
+          where: { date: { gte: activeSeason.startDate, lte: activeSeason.endDate } },
+        })
+      : Promise.resolve(0),
+    activeSeason
+      ? prisma.financeTransaction.aggregate({
           where: {
             type: "REVENUE",
-            date: { gte: season.startDate, lte: season.endDate },
+            date: { gte: activeSeason.startDate, lte: activeSeason.endDate },
           },
           _sum: { amount: true },
-        }),
-        prisma.financeTransaction.aggregate({
+        })
+      : Promise.resolve(null),
+    activeSeason
+      ? prisma.financeTransaction.aggregate({
           where: {
             type: "EXPENSE",
-            date: { gte: season.startDate, lte: season.endDate },
+            date: { gte: activeSeason.startDate, lte: activeSeason.endDate },
           },
           _sum: { amount: true },
-        }),
-      ]);
-      return {
-        bookings,
-        revenue: Number(revenue._sum.amount ?? 0),
-        expense: Number(expense._sum.amount ?? 0),
-      };
-    }),
+        })
+      : Promise.resolve(null),
     prisma.financeTransaction.aggregate({
       where: { type: "EXPENSE", date: { gte: todayStart, lte: todayEnd } },
       _sum: { amount: true },
@@ -190,11 +220,16 @@ export async function getDashboardData() {
     }),
   ]);
 
+  // Needs the IDs from topDiveSitesRaw first, so it can't join the batch
+  // above -- but it's a single indexed IN-lookup for at most 5 rows.
   const diveSiteIds = topDiveSitesRaw
     .map((d) => d.diveSiteId)
     .filter((id): id is string => !!id);
   const diveSites = diveSiteIds.length
-    ? await prisma.diveSite.findMany({ where: { id: { in: diveSiteIds } } })
+    ? await prisma.diveSite.findMany({
+        where: { id: { in: diveSiteIds } },
+        select: { id: true, name: true },
+      })
     : [];
   const diveSiteMap = new Map(diveSites.map((d) => [d.id, d.name]));
 
@@ -205,11 +240,6 @@ export async function getDashboardData() {
     new Set(todayBookings.map((b) => b.boat?.name).filter(Boolean))
   ) as string[];
   const todayGuestCount = new Set(todayBookings.map((b) => b.guestId)).size;
-
-  const todayPayments = await prisma.payment.aggregate({
-    where: { paidAt: { gte: todayStart, lte: todayEnd }, status: "PAID" },
-    _sum: { amount: true },
-  });
 
   const revenueThisMonth = Number(
     monthTransactions.find((t) => t.type === "REVENUE")?._sum.amount ?? 0
@@ -265,6 +295,14 @@ export async function getDashboardData() {
     (item) => item.currentStock <= item.reorderLevel
   ).length;
 
+  const seasonToDate = activeSeason
+    ? {
+        bookings: seasonBookingsCount,
+        revenue: Number(seasonRevenueAgg?._sum.amount ?? 0),
+        expense: Number(seasonExpenseAgg?._sum.amount ?? 0),
+      }
+    : null;
+
   return {
     today: {
       guests: todayGuestCount,
@@ -278,7 +316,6 @@ export async function getDashboardData() {
       visibility: todayOps?.visibility ?? null,
       seaCondition: todayOps?.seaCondition ?? null,
       snackCount: (todaySnack?.snackBoxCount ?? 0) + (todaySnack?.buffetCount ?? 0),
-      bookings: todayBookings,
     },
     pending: {
       paymentsAmount: Number(pendingPayments._sum.amount ?? 0),
@@ -287,13 +324,16 @@ export async function getDashboardData() {
       freelancerPaymentsCount: pendingFreelancerPayments._count,
       certificationsCount: pendingCertificationsCount,
     },
+    // Dates are converted to ISO strings so this whole object stays
+    // JSON-safe for the unstable_cache layer below (Date objects don't
+    // survive a cache round-trip). Consumers wrap them back in `new Date()`.
     upcomingCourses: upcomingCourses.map((c) => ({
       id: c.id,
       guestName: c.guest.fullName,
       courseName: c.course.name,
       agency: c.course.agency,
       instructorName: c.instructor?.fullName ?? "Unassigned",
-      startDate: c.startDate,
+      startDate: c.startDate ? c.startDate.toISOString() : null,
       progress: c.progress,
     })),
     reviews: {
@@ -331,12 +371,12 @@ export async function getDashboardData() {
     season: activeSeason
       ? {
           name: activeSeason.name,
-          startDate: activeSeason.startDate,
-          endDate: activeSeason.endDate,
-          bookings: seasonBookingsAgg?.bookings ?? 0,
-          revenue: seasonBookingsAgg?.revenue ?? 0,
-          expense: seasonBookingsAgg?.expense ?? 0,
-          profit: (seasonBookingsAgg?.revenue ?? 0) - (seasonBookingsAgg?.expense ?? 0),
+          startDate: activeSeason.startDate.toISOString(),
+          endDate: activeSeason.endDate.toISOString(),
+          bookings: seasonToDate?.bookings ?? 0,
+          revenue: seasonToDate?.revenue ?? 0,
+          expense: seasonToDate?.expense ?? 0,
+          profit: (seasonToDate?.revenue ?? 0) - (seasonToDate?.expense ?? 0),
         }
       : null,
     vendorPaymentsDue: Number(vendorOutstandingAgg._sum.outstandingAmount ?? 0),
@@ -364,5 +404,16 @@ export async function getDashboardData() {
     },
   };
 }
+
+// Cross-request cache, not just per-request memoization: the CEO dashboard
+// is read far more often than its underlying numbers change, so every
+// mutation that touches a dashboard figure pairs its revalidatePath("/")
+// call with revalidateTag("dashboard") (see src/actions/*.ts) for immediate
+// invalidation, with this 45s revalidate as a safety net for any mutation
+// path that doesn't go through a server action (e.g. direct DB access).
+export const getDashboardData = unstable_cache(computeDashboardData, ["dashboard-data"], {
+  tags: ["dashboard"],
+  revalidate: 45,
+});
 
 export type DashboardData = Awaited<ReturnType<typeof getDashboardData>>;

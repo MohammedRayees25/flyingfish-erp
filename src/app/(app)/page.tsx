@@ -24,8 +24,9 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { getDashboardData } from "@/lib/dashboard";
+import { recordDashboardPageView } from "@/lib/perf-metrics";
 import { StatCard } from "@/components/dashboard/stat-card";
-import { RevenueChart } from "@/components/dashboard/revenue-chart";
+import { RevenueChart } from "@/components/dashboard/revenue-chart-lazy";
 import { RankedBarList } from "@/components/dashboard/ranked-bar-list";
 import {
   Card,
@@ -39,6 +40,7 @@ import { ACTIVITY_LABELS, formatCurrencyINR } from "@/lib/labels";
 import { format } from "date-fns";
 
 export default async function DashboardPage() {
+  recordDashboardPageView();
   const data = await getDashboardData();
 
   return (
@@ -368,7 +370,7 @@ export default async function DashboardPage() {
                       </p>
                     </div>
                     <Badge variant="outline">
-                      {c.startDate ? format(c.startDate, "d MMM") : "TBD"}
+                      {c.startDate ? format(new Date(c.startDate), "d MMM") : "TBD"}
                     </Badge>
                   </li>
                 ))}
@@ -450,8 +452,8 @@ export default async function DashboardPage() {
                   </p>
                 </div>
                 <div className="col-span-2 text-xs text-muted-foreground">
-                  {format(data.season.startDate, "d MMM yyyy")} –{" "}
-                  {format(data.season.endDate, "d MMM yyyy")}
+                  {format(new Date(data.season.startDate), "d MMM yyyy")} –{" "}
+                  {format(new Date(data.season.endDate), "d MMM yyyy")}
                 </div>
               </div>
             ) : (

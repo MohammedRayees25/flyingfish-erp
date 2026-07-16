@@ -1,8 +1,9 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireModuleAccess } from "@/lib/auth/current-user";
+import { fieldErrorsFrom } from "@/lib/form-errors";
 import {
   socialPostSchema,
   followerSnapshotSchema,
@@ -16,14 +17,6 @@ export type SocialActionState =
 
 function toDateOnly(dateStr: string): Date {
   return new Date(`${dateStr}T00:00:00.000Z`);
-}
-
-function fieldErrorsFrom(error: import("zod").ZodError) {
-  const fieldErrors: Record<string, string> = {};
-  for (const issue of error.issues) {
-    fieldErrors[String(issue.path[0])] = issue.message;
-  }
-  return fieldErrors;
 }
 
 export async function createSocialPost(input: SocialPostInput): Promise<SocialActionState> {
@@ -57,6 +50,7 @@ export async function createSocialPost(input: SocialPostInput): Promise<SocialAc
 
   revalidatePath("/social");
   revalidatePath("/");
+  revalidateTag("dashboard");
   return undefined;
 }
 
@@ -95,6 +89,7 @@ export async function updateSocialPost(
 
   revalidatePath("/social");
   revalidatePath("/");
+  revalidateTag("dashboard");
   return undefined;
 }
 
@@ -103,6 +98,7 @@ export async function deleteSocialPost(postId: string): Promise<SocialActionStat
   await prisma.socialMediaPost.delete({ where: { id: postId } });
   revalidatePath("/social");
   revalidatePath("/");
+  revalidateTag("dashboard");
   return undefined;
 }
 

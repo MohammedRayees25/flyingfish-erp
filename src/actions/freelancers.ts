@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireModuleAccess } from "@/lib/auth/current-user";
 import {
@@ -11,6 +11,7 @@ import {
   type FreelancerPaymentInput,
 } from "@/lib/validations/freelancer";
 import type { AttendanceStatus } from "@prisma/client";
+import { fieldErrorsFrom } from "@/lib/form-errors";
 
 export type FreelancerActionState =
   | { error?: string; fieldErrors?: Record<string, string> }
@@ -18,14 +19,6 @@ export type FreelancerActionState =
 
 function toDateOnly(dateStr: string): Date {
   return new Date(`${dateStr}T00:00:00.000Z`);
-}
-
-function fieldErrorsFrom(error: import("zod").ZodError) {
-  const fieldErrors: Record<string, string> = {};
-  for (const issue of error.issues) {
-    fieldErrors[String(issue.path[0])] = issue.message;
-  }
-  return fieldErrors;
 }
 
 export async function createFreelancer(
@@ -146,6 +139,8 @@ export async function recordFreelancerPayment(
 
   revalidatePath(`/freelancers/${freelancerId}`);
   revalidatePath("/freelancers");
+  revalidatePath("/");
+  revalidateTag("dashboard");
   return undefined;
 }
 
@@ -161,5 +156,7 @@ export async function markFreelancerPaymentPaid(
 
   revalidatePath(`/freelancers/${payment.freelancerId}`);
   revalidatePath("/freelancers");
+  revalidatePath("/");
+  revalidateTag("dashboard");
   return undefined;
 }

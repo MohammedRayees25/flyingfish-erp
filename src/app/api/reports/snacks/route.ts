@@ -37,15 +37,42 @@ export async function GET(request: NextRequest) {
   const [purchases, consumptions, items] = await Promise.all([
     prisma.snackPurchase.findMany({
       where: { date: { gte: start, lte: end } },
-      include: { item: true },
+      select: {
+        itemId: true,
+        date: true,
+        quantity: true,
+        unitCost: true,
+        totalCost: true,
+        vendor: true,
+        notes: true,
+        item: { select: { name: true, unit: true } },
+      },
       orderBy: { date: "asc" },
     }),
     prisma.snackConsumption.findMany({
       where: { date: { gte: start, lte: end } },
-      include: { item: true, guest: true, boat: true },
+      select: {
+        itemId: true,
+        date: true,
+        quantity: true,
+        notes: true,
+        item: { select: { name: true, unit: true, costPerUnit: true } },
+        guest: { select: { fullName: true } },
+        boat: { select: { name: true } },
+      },
       orderBy: { date: "asc" },
     }),
-    prisma.snackItem.findMany({ orderBy: { name: "asc" } }),
+    prisma.snackItem.findMany({
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        unit: true,
+        costPerUnit: true,
+        currentStock: true,
+        reorderLevel: true,
+      },
+    }),
   ]);
 
   const totalPurchaseCost = purchases.reduce((sum, p) => sum + Number(p.totalCost), 0);

@@ -24,11 +24,11 @@ import {
 import { StatCard } from "@/components/dashboard/stat-card";
 import { RankedBarList } from "@/components/dashboard/ranked-bar-list";
 import { AmountRankedList } from "@/components/analytics/amount-ranked-list";
-import { TrendChart } from "@/components/analytics/trend-chart";
-import { ComparisonBarChart } from "@/components/analytics/comparison-bar-chart";
+import { TrendChart } from "@/components/analytics/trend-chart-lazy";
+import { ComparisonBarChart } from "@/components/analytics/comparison-bar-chart-lazy";
 import { InstructorTable } from "@/components/analytics/instructor-table";
-import { BoatUtilizationChart } from "@/components/analytics/boat-utilization-chart";
-import { GuestGrowthChart } from "@/components/analytics/guest-growth-chart";
+import { BoatUtilizationChart } from "@/components/analytics/boat-utilization-chart-lazy";
+import { GuestGrowthChart } from "@/components/analytics/guest-growth-chart-lazy";
 import { formatCurrencyINR } from "@/lib/labels";
 
 export const metadata: Metadata = { title: "Analytics" };

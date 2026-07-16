@@ -7,11 +7,14 @@ freelancers, finance, certifications, marketing and reporting.
 Built with Next.js 15 (App Router), TypeScript, Tailwind CSS, shadcn/ui, Prisma,
 Supabase (Postgres + Auth), React Hook Form, Zod, TanStack Table and Recharts.
 
-> **Status: Phase 4 complete** — every planned module is implemented and live:
+> **Status: Phase 6 complete** — every planned module is implemented and live:
 > Authentication & RBAC, the CEO Dashboard, Guest Management, Bookings, Boat
 > Sharing, Staff Attendance, Freelancer Management, Finance, Reports, Analytics,
 > Novotel Snacks, Dive Logs, Certifications, Google Reviews, Social Media, CRM
-> and Settings. See [Roadmap](#roadmap) for post-launch hardening work.
+> and Settings — every one with full Add/Edit/Delete, and a performance pass
+> across the dashboard, queries, indexes, bundle size and loading states (see
+> [Performance](#performance)). See [Roadmap](#roadmap) for post-launch
+> hardening work.
 
 ## Tech stack
 
@@ -308,6 +311,40 @@ single transaction, and is safe to run more than once. It's a one-off repair scr
 a substitute for `prisma/migrations/*` — run `prisma/sql/check_migration_state.sql` first
 if you haven't already, to see what's actually missing before running this.
 
+## Performance
+
+- **Dashboard caching.** `getDashboardData()` (`src/lib/dashboard.ts`) is wrapped in
+  `unstable_cache` with a 45s TTL and the `"dashboard"` tag. Every server action that
+  mutates a figure the dashboard displays calls `revalidateTag("dashboard")` right next
+  to its existing `revalidatePath("/")` — so the cache clears immediately on a relevant
+  mutation, with the 45s TTL as a safety net for anything that doesn't go through a
+  server action. On a cache hit the dashboard does zero database queries.
+- **Query shape.** Every list/detail page uses `select` (not `include`) once a relation's
+  full row isn't needed, `Promise.all` for independent queries, and server-side
+  pagination + search (`skip`/`take` + a paired `count()`, `q`/`page` URL params) for
+  every table backed by a potentially large table — including Boat Sharing's Entries
+  tab, which previously hard-capped at the 60 most recent rows with no way to page
+  further back or search.
+- **Indexes.** `prisma/migrations/*_phase6_performance_indexes` adds composite indexes
+  matching the app's actual filter patterns (e.g. `Booking(status, date)`,
+  `FinanceTransaction(type, date)`) and indexes on foreign-key columns Postgres doesn't
+  index automatically (e.g. `DiveLog.diveSiteId/instructorId/boatId`,
+  `SnackPurchase/SnackConsumption.itemId`).
+- **Bundle size.** Recharts-based chart components are code-split with `next/dynamic`
+  (`*-chart-lazy.tsx` wrapper files, `ssr: false`, a `Skeleton` fallback), as is the
+  command palette (`cmdk`, opened on demand). This dropped First Load JS on the
+  dashboard and analytics pages from ~220 KB to ~113 KB, and on chart-heavy module
+  pages (CRM, Social, Reviews, Dive Logs, Finance) by 100–115 KB each.
+- **Loading states.** Every route has a `loading.tsx` (skeletons matching each page's
+  actual layout, in `src/components/skeletons/`), so navigating anywhere shows a
+  layout-matched skeleton instead of a blank screen while the Server Component fetches
+  data.
+- **`/settings/performance`** (Super Admin / Founder only) shows live metrics: database
+  size, largest tables, Prisma query counts and timings by page (in-memory sample,
+  collected since the server process last started), and the dashboard cache hit rate.
+  It also surfaces `pg_stat_statements` output if that extension is enabled on the
+  database.
+
 ## Security notes
 
 - All application data access goes through Prisma using the trusted server-side
@@ -326,7 +363,11 @@ if you haven't already, to see what's actually missing before running this.
 - **Phase 3** ✅ — Finance, Reports, Analytics
 - **Phase 4** ✅ — Novotel Snacks, Dive Logs, Certifications, Google Reviews,
   Social Media, CRM, Settings — every sidebar module is now implemented
-- **Phase 5** — Post-launch hardening: automated test coverage, file-storage
+- **Phase 5** ✅ — Full Add/Edit/Delete CRUD on every operational module (Staff
+  Attendance was the one module still missing it), plus dashboard-staleness fixes
+- **Phase 6** ✅ — Performance: dashboard caching, query optimization, indexes,
+  bundle-size reduction, loading states — see [Performance](#performance)
+- **Phase 7** — Post-launch hardening: automated test coverage, file-storage
   integration for real photo/logo uploads (dive log photos and the company
   logo currently take a URL, since no object-storage bucket is provisioned
   yet), email/WhatsApp notification delivery (Settings has the on/off

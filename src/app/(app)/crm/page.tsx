@@ -12,7 +12,7 @@ import { StatCard } from "@/components/dashboard/stat-card";
 import { LeadFormSheet } from "@/components/crm/lead-form-sheet";
 import { LeadsTable, type LeadRow } from "@/components/crm/leads-table";
 import { PipelineBoard, type PipelineLead } from "@/components/crm/pipeline-board";
-import { LeadFunnelChart } from "@/components/crm/lead-funnel-chart";
+import { LeadFunnelChart } from "@/components/crm/lead-funnel-chart-lazy";
 import { TodaysFollowups } from "@/components/crm/todays-followups";
 import { LEAD_STAGE_ORDER, LEAD_STAGE_LABELS } from "@/lib/crm-labels";
 
@@ -92,7 +92,18 @@ export default async function CrmPage({
 }
 
 async function PipelineTab() {
-  const leadsRaw = await prisma.lead.findMany({ orderBy: { createdAt: "desc" } });
+  const leadsRaw = await prisma.lead.findMany({
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      fullName: true,
+      phone: true,
+      source: true,
+      followUpAt: true,
+      isRepeatCustomer: true,
+      stage: true,
+    },
+  });
 
   const leadsByStage = Object.fromEntries(
     LEAD_STAGE_ORDER.map((stage) => [stage, [] as PipelineLead[]])
@@ -218,6 +229,7 @@ async function OverviewTab() {
     prisma.lead.findMany({
       where: { followUpAt: { gte: startOfDay(now), lte: endOfDay(now) } },
       orderBy: { followUpAt: "asc" },
+      select: { id: true, fullName: true, phone: true, followUpAt: true },
     }),
   ]);
 

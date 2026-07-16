@@ -58,11 +58,30 @@ export default async function GuestDetailPage({
     where: { id },
     include: {
       bookings: {
-        include: { boat: true, diveSite: true, instructor: true },
+        select: {
+          date: true,
+          activityType: true,
+          status: true,
+          boat: { select: { name: true } },
+          diveSite: { select: { name: true } },
+          instructor: { select: { fullName: true } },
+        },
         orderBy: { date: "desc" },
       },
-      payments: { orderBy: { createdAt: "desc" } },
-      certifications: { include: { course: true, instructor: true }, orderBy: { createdAt: "desc" } },
+      payments: {
+        select: { amount: true, method: true, status: true, paidAt: true, createdAt: true },
+        orderBy: { createdAt: "desc" },
+      },
+      certifications: {
+        select: {
+          startDate: true,
+          createdAt: true,
+          status: true,
+          course: { select: { name: true } },
+          instructor: { select: { fullName: true } },
+        },
+        orderBy: { createdAt: "desc" },
+      },
     },
   });
 

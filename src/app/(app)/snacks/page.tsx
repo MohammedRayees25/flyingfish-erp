@@ -101,12 +101,25 @@ async function OverviewTab() {
       }),
       prisma.snackItem.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
       prisma.snackPurchase.findMany({
-        include: { item: true },
+        select: {
+          id: true,
+          date: true,
+          quantity: true,
+          vendor: true,
+          item: { select: { name: true, unit: true } },
+        },
         orderBy: [{ date: "desc" }, { createdAt: "desc" }],
         take: 10,
       }),
       prisma.snackConsumption.findMany({
-        include: { item: true, guest: true, boat: true },
+        select: {
+          id: true,
+          date: true,
+          quantity: true,
+          item: { select: { name: true, unit: true } },
+          guest: { select: { fullName: true } },
+          boat: { select: { name: true } },
+        },
         orderBy: [{ date: "desc" }, { createdAt: "desc" }],
         take: 10,
       }),
@@ -219,7 +232,15 @@ async function PurchasesTab({
   const [purchasesRaw, total, itemsRaw] = await Promise.all([
     prisma.snackPurchase.findMany({
       where,
-      include: { item: true },
+      select: {
+        id: true,
+        date: true,
+        quantity: true,
+        unitCost: true,
+        totalCost: true,
+        vendor: true,
+        item: { select: { name: true, unit: true } },
+      },
       orderBy: { date: "desc" },
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
@@ -297,7 +318,14 @@ async function ConsumptionTab({
   const [consumptionsRaw, total, itemsRaw, boats] = await Promise.all([
     prisma.snackConsumption.findMany({
       where,
-      include: { item: true, guest: true, boat: true },
+      select: {
+        id: true,
+        date: true,
+        quantity: true,
+        item: { select: { name: true, unit: true } },
+        guest: { select: { fullName: true } },
+        boat: { select: { name: true } },
+      },
       orderBy: { date: "desc" },
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,

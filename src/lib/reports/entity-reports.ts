@@ -42,12 +42,18 @@ export async function buildGuestReport(period: ReportPeriod): Promise<ReportTabl
     where: {
       bookings: { some: { date: { gte: period.start, lte: period.end } } },
     },
-    include: {
+    select: {
+      fullName: true,
+      nationality: true,
+      certificationLevel: true,
+      previousDives: true,
       bookings: {
         where: { date: { gte: period.start, lte: period.end } },
+        select: { id: true },
       },
       payments: {
         where: { status: "PAID" },
+        select: { amount: true },
       },
     },
     orderBy: { fullName: "asc" },
@@ -90,6 +96,7 @@ export async function buildInstructorReport(period: ReportPeriod): Promise<Repor
   const instructors = await prisma.user.findMany({
     where: { role: "INSTRUCTOR" },
     orderBy: { fullName: "asc" },
+    select: { id: true, fullName: true },
   });
 
   const rows = await Promise.all(
@@ -158,9 +165,14 @@ export async function buildInstructorReport(period: ReportPeriod): Promise<Repor
 
 export async function buildStaffAttendanceReport(period: ReportPeriod): Promise<ReportTable> {
   const [staff, records] = await Promise.all([
-    prisma.user.findMany({ where: { isActive: true }, orderBy: { fullName: "asc" } }),
+    prisma.user.findMany({
+      where: { isActive: true },
+      orderBy: { fullName: "asc" },
+      select: { id: true, fullName: true },
+    }),
     prisma.staffAttendance.findMany({
       where: { date: { gte: period.start, lte: period.end } },
+      select: { userId: true, status: true },
     }),
   ]);
 
@@ -213,9 +225,17 @@ export async function buildStaffAttendanceReport(period: ReportPeriod): Promise<
 
 export async function buildFreelancerPaymentReport(period: ReportPeriod): Promise<ReportTable> {
   const freelancers = await prisma.freelancer.findMany({
-    include: {
-      payments: { where: { createdAt: { gte: period.start, lte: period.end } } },
-      attendance: { where: { date: { gte: period.start, lte: period.end }, status: "PRESENT" } },
+    select: {
+      fullName: true,
+      role: true,
+      payments: {
+        where: { createdAt: { gte: period.start, lte: period.end } },
+        select: { status: true, amount: true },
+      },
+      attendance: {
+        where: { date: { gte: period.start, lte: period.end }, status: "PRESENT" },
+        select: { id: true },
+      },
     },
     orderBy: { fullName: "asc" },
   });

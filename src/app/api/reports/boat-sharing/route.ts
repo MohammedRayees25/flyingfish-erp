@@ -14,7 +14,12 @@ export async function GET(request: NextRequest) {
 
   if (type === "season") {
     const seasonId = request.nextUrl.searchParams.get("seasonId");
-    const season = seasonId ? await prisma.season.findUnique({ where: { id: seasonId } }) : null;
+    const season = seasonId
+      ? await prisma.season.findUnique({
+          where: { id: seasonId },
+          select: { name: true, startDate: true, endDate: true },
+        })
+      : null;
     if (!season) {
       return new Response("Season not found", { status: 404 });
     }
@@ -30,7 +35,22 @@ export async function GET(request: NextRequest) {
 
   const entries = await prisma.boatSharingEntry.findMany({
     where: { date: { gte: start, lte: end } },
-    include: { boat: true, splits: true },
+    select: {
+      date: true,
+      boatVendorName: true,
+      boatAmount: true,
+      tempoAmount: true,
+      ffGuests: true,
+      dgGuests: true,
+      seiGuests: true,
+      totalGuests: true,
+      vendorPaymentStatus: true,
+      outstandingAmount: true,
+      boat: { select: { name: true } },
+      splits: {
+        select: { partyName: true, guestCount: true, amountDue: true, amountPaid: true, status: true },
+      },
+    },
     orderBy: { date: "asc" },
   });
 

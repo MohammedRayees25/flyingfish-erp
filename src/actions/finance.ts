@@ -1,8 +1,9 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireModuleAccess } from "@/lib/auth/current-user";
+import { fieldErrorsFrom } from "@/lib/form-errors";
 import {
   transactionSchema,
   salaryAmountSchema,
@@ -12,14 +13,6 @@ import {
 export type FinanceActionState =
   | { error?: string; fieldErrors?: Record<string, string> }
   | undefined;
-
-function fieldErrorsFrom(error: import("zod").ZodError) {
-  const fieldErrors: Record<string, string> = {};
-  for (const issue of error.issues) {
-    fieldErrors[String(issue.path[0])] = issue.message;
-  }
-  return fieldErrors;
-}
 
 export async function createTransaction(input: TransactionInput): Promise<FinanceActionState> {
   const user = await requireModuleAccess("finance");
@@ -44,6 +37,7 @@ export async function createTransaction(input: TransactionInput): Promise<Financ
 
   revalidatePath("/finance");
   revalidatePath("/");
+  revalidateTag("dashboard");
   return undefined;
 }
 
@@ -73,6 +67,7 @@ export async function updateTransaction(
 
   revalidatePath("/finance");
   revalidatePath("/");
+  revalidateTag("dashboard");
   return undefined;
 }
 
@@ -81,6 +76,7 @@ export async function deleteTransaction(transactionId: string): Promise<FinanceA
   await prisma.financeTransaction.delete({ where: { id: transactionId } });
   revalidatePath("/finance");
   revalidatePath("/");
+  revalidateTag("dashboard");
   return undefined;
 }
 
@@ -116,6 +112,7 @@ export async function generateMonthlySalaries(month: string): Promise<FinanceAct
 
   const staff = await prisma.user.findMany({
     where: { isActive: true, monthlySalary: { gt: 0 } },
+    select: { id: true, monthlySalary: true },
   });
 
   await Promise.all(

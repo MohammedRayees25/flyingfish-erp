@@ -10,6 +10,8 @@ import { UsersTab } from "@/components/settings/users-tab";
 import { PricingTab } from "@/components/settings/pricing-tab";
 import { NotificationsTab } from "@/components/settings/notifications-tab";
 import { AuditLogTab } from "@/components/settings/audit-log-tab";
+import { Button } from "@/components/ui/button";
+import { Gauge } from "lucide-react";
 import { ACTIVITY_LABELS } from "@/lib/labels";
 import type { ActivityType } from "@prisma/client";
 
@@ -33,11 +35,18 @@ export default async function SettingsPage({
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-        <p className="text-sm text-muted-foreground">
-          Company details, users &amp; roles, pricing, notifications and audit log.
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+          <p className="text-sm text-muted-foreground">
+            Company details, users &amp; roles, pricing, notifications and audit log.
+          </p>
+        </div>
+        <Button variant="outline" asChild>
+          <Link href="/settings/performance">
+            <Gauge /> Performance
+          </Link>
+        </Button>
       </div>
 
       <Tabs value={tab}>
@@ -96,7 +105,19 @@ export default async function SettingsPage({
 }
 
 async function UsersTabSection({ currentUserId }: { currentUserId: string | null }) {
-  const users = await prisma.user.findMany({ orderBy: { fullName: "asc" } });
+  const users = await prisma.user.findMany({
+    orderBy: { fullName: "asc" },
+    select: {
+      id: true,
+      fullName: true,
+      email: true,
+      phone: true,
+      role: true,
+      avatarUrl: true,
+      isActive: true,
+      monthlySalary: true,
+    },
+  });
   const rows = users.map((u) => ({
     id: u.id,
     fullName: u.fullName,

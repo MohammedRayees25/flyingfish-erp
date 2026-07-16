@@ -5,18 +5,11 @@ import { prisma } from "@/lib/prisma";
 import { requireModuleAccess } from "@/lib/auth/current-user";
 import { leadSchema, LEAD_STAGES, type LeadInput } from "@/lib/validations/crm";
 import type { LeadStage } from "@prisma/client";
+import { fieldErrorsFrom } from "@/lib/form-errors";
 
 export type LeadActionState =
   | { error?: string; fieldErrors?: Record<string, string> }
   | undefined;
-
-function fieldErrorsFrom(error: import("zod").ZodError) {
-  const fieldErrors: Record<string, string> = {};
-  for (const issue of error.issues) {
-    fieldErrors[String(issue.path[0])] = issue.message;
-  }
-  return fieldErrors;
-}
 
 export async function createLead(input: LeadInput): Promise<LeadActionState> {
   await requireModuleAccess("crm");

@@ -14,32 +14,49 @@ import { ReportView } from "@/components/boat-sharing/report-view";
 
 export const metadata: Metadata = { title: "Boat Sharing" };
 
+const PAGE_SIZE = 20;
+
 export default async function BoatSharingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; month?: string }>;
+  searchParams: Promise<{ tab?: string; month?: string; q?: string; page?: string }>;
 }) {
   await requireModuleAccess("boatSharing");
   const params = await searchParams;
   const tab = ["entries", "pending", "reports"].includes(params.tab ?? "") ? params.tab! : "entries";
   const month = params.month ?? format(new Date(), "yyyy-MM");
+  const query = params.q?.trim() ?? "";
+  const page = Math.max(1, Number(params.page) || 1);
 
-  const boatsRaw = await getBoats();
-  const boats = boatsRaw.map((b) => ({ id: b.id, name: b.name }));
+  const entriesWhere = query
+    ? {
+        OR: [
+          { boatVendorName: { contains: query, mode: "insensitive" as const } },
+          { boat: { name: { contains: query, mode: "insensitive" as const } } },
+        ],
+      }
+    : {};
 
-  const [entriesRaw, pendingSplitsRaw, activeSeason] = await Promise.all([
+  const [boatsRaw, entriesRaw, entriesTotal, pendingSplitsRaw, activeSeason] = await Promise.all([
+    getBoats(),
     prisma.boatSharingEntry.findMany({
+      where: entriesWhere,
       orderBy: { date: "desc" },
-      take: 60,
-      include: { boat: true },
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+      include: { boat: { select: { name: true } } },
     }),
+    prisma.boatSharingEntry.count({ where: entriesWhere }),
     prisma.boatSharingSplit.findMany({
       where: { status: { in: ["PENDING", "PARTIAL"] } },
-      include: { entry: { include: { boat: true } } },
+      include: {
+        entry: { select: { date: true, boat: { select: { name: true } } } },
+      },
       orderBy: { entry: { date: "desc" } },
     }),
     prisma.season.findFirst({ where: { isActive: true } }),
   ]);
+  const boats = boatsRaw.map((b) => ({ id: b.id, name: b.name }));
 
   const entries = entriesRaw.map((e) => ({
     ...e,
@@ -96,7 +113,14 @@ export default async function BoatSharingPage({
         <TabsContent value="entries">
           <Card>
             <CardContent className="pt-6">
-              <EntriesTable entries={entries} boats={boats} />
+              <EntriesTable
+                entries={entries}
+                boats={boats}
+                total={entriesTotal}
+                page={page}
+                pageSize={PAGE_SIZE}
+                query={query}
+              />
             </CardContent>
           </Card>
         </TabsContent>

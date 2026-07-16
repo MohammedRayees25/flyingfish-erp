@@ -19,11 +19,14 @@ export async function GET(request: NextRequest) {
 
   const freelancers = await prisma.freelancer.findMany({
     orderBy: { fullName: "asc" },
-    include: {
+    select: {
+      fullName: true,
+      role: true,
       attendance: {
         where: { date: { gte: monthStart, lte: monthEnd }, status: "PRESENT" },
+        select: { id: true },
       },
-      payments: true,
+      payments: { select: { status: true, amount: true } },
     },
   });
 

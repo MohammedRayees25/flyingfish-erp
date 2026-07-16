@@ -58,7 +58,15 @@ export async function GET(request: NextRequest) {
 
   const certifications = await prisma.guestCertification.findMany({
     where,
-    include: { guest: true, course: true, instructor: true },
+    select: {
+      status: true,
+      progress: true,
+      certificateNumber: true,
+      issueDate: true,
+      guest: { select: { fullName: true } },
+      course: { select: { name: true, agency: true } },
+      instructor: { select: { fullName: true } },
+    },
     orderBy: { createdAt: "desc" },
   });
 

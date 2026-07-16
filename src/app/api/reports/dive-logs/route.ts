@@ -34,7 +34,13 @@ export async function GET(request: NextRequest) {
   const logs = await prisma.diveLog.findMany({
     where,
     orderBy: { date: "desc" },
-    include: {
+    select: {
+      date: true,
+      entryTime: true,
+      exitTime: true,
+      bottomTimeMin: true,
+      maxDepth: true,
+      visibility: true,
       diveSite: { select: { name: true } },
       instructor: { select: { fullName: true } },
       boat: { select: { name: true } },

@@ -46,7 +46,10 @@ export async function getAnalyticsData() {
       where: { date: { gte: firstMonthStart } },
       select: { date: true, type: true, amount: true },
     }),
-    prisma.season.findMany({ orderBy: { startDate: "asc" } }),
+    prisma.season.findMany({
+      orderBy: { startDate: "asc" },
+      select: { name: true, startDate: true, endDate: true },
+    }),
     prisma.booking.groupBy({
       by: ["activityType"],
       where: { status: { in: [...ACTIVE_BOOKING_STATUSES] } },
@@ -60,8 +63,11 @@ export async function getAnalyticsData() {
       orderBy: { _count: { diveSiteId: "desc" } },
       take: 8,
     }),
-    prisma.user.findMany({ where: { role: "INSTRUCTOR" } }),
-    prisma.boat.findMany({ where: { isActive: true } }),
+    prisma.user.findMany({ where: { role: "INSTRUCTOR" }, select: { id: true, fullName: true } }),
+    prisma.boat.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, capacity: true },
+    }),
     prisma.booking.groupBy({
       by: ["boatId"],
       where: { status: { in: [...ACTIVE_BOOKING_STATUSES] }, boatId: { not: null } },
@@ -160,7 +166,10 @@ export async function getAnalyticsData() {
   // --- Dive site popularity ---
   const diveSiteIds = diveSiteGroups.map((d) => d.diveSiteId).filter((id): id is string => !!id);
   const diveSites = diveSiteIds.length
-    ? await prisma.diveSite.findMany({ where: { id: { in: diveSiteIds } } })
+    ? await prisma.diveSite.findMany({
+        where: { id: { in: diveSiteIds } },
+        select: { id: true, name: true },
+      })
     : [];
   const diveSiteMap = new Map(diveSites.map((d) => [d.id, d.name]));
   const diveSitePopularity = diveSiteGroups.map((d) => ({

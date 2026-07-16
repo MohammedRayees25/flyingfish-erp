@@ -1,9 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { format } from "date-fns";
-import { Trash2 } from "lucide-react";
+import { Search, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import {
   Table,
@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -54,9 +55,45 @@ const VENDOR_STATUS_VARIANT: Record<VendorPaymentStatus, "success" | "warning" |
   PENDING: "destructive",
 };
 
-export function EntriesTable({ entries, boats }: { entries: Entry[]; boats: { id: string; name: string }[] }) {
+export function EntriesTable({
+  entries,
+  boats,
+  total,
+  page,
+  pageSize,
+  query,
+}: {
+  entries: Entry[];
+  boats: { id: string; name: string }[];
+  total: number;
+  page: number;
+  pageSize: number;
+  query: string;
+}) {
   const [deleteTarget, setDeleteTarget] = React.useState<string | null>(null);
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [search, setSearch] = React.useState(query);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  React.useEffect(() => {
+    const timeout = setTimeout(() => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (search) params.set("q", search);
+      else params.delete("q");
+      params.delete("page");
+      router.push(`${pathname}?${params.toString()}`);
+    }, 300);
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
+
+  function goToPage(p: number) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("page", String(p));
+    router.push(`${pathname}?${params.toString()}`);
+  }
 
   async function handleDelete() {
     if (!deleteTarget) return;
@@ -70,7 +107,18 @@ export function EntriesTable({ entries, boats }: { entries: Entry[]; boats: { id
   }
 
   return (
-    <div className="overflow-x-auto rounded-md border">
+    <div className="flex flex-col gap-4">
+      <div className="relative max-w-sm">
+        <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+        <Input
+          placeholder="Search boat or vendor…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-8"
+        />
+      </div>
+
+      <div className="overflow-x-auto rounded-md border">
       <Table>
         <TableHeader>
           <TableRow>
@@ -138,6 +186,28 @@ export function EntriesTable({ entries, boats }: { entries: Entry[]; boats: { id
           )}
         </TableBody>
       </Table>
+      </div>
+
+      {totalPages > 1 ? (
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
+          <span>
+            Page {page} of {totalPages}
+          </span>
+          <div className="flex gap-2">
+            <Button variant="outline" size="icon" disabled={page <= 1} onClick={() => goToPage(page - 1)}>
+              <ChevronLeft className="size-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              disabled={page >= totalPages}
+              onClick={() => goToPage(page + 1)}
+            >
+              <ChevronRight className="size-4" />
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>

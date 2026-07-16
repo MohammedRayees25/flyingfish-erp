@@ -1,8 +1,9 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireModuleAccess } from "@/lib/auth/current-user";
+import { fieldErrorsFrom } from "@/lib/form-errors";
 import {
   snackItemSchema,
   snackPurchaseSchema,
@@ -18,14 +19,6 @@ export type SnackActionState =
 
 function toDateOnly(dateStr: string): Date {
   return new Date(`${dateStr}T00:00:00.000Z`);
-}
-
-function fieldErrorsFrom(error: import("zod").ZodError) {
-  const fieldErrors: Record<string, string> = {};
-  for (const issue of error.issues) {
-    fieldErrors[String(issue.path[0])] = issue.message;
-  }
-  return fieldErrors;
 }
 
 // ---------------------------------------------------------------------------
@@ -54,6 +47,7 @@ export async function createSnackItem(input: SnackItemInput): Promise<SnackActio
 
   revalidatePath("/snacks");
   revalidatePath("/");
+  revalidateTag("dashboard");
   return undefined;
 }
 
@@ -83,6 +77,7 @@ export async function updateSnackItem(
 
   revalidatePath("/snacks");
   revalidatePath("/");
+  revalidateTag("dashboard");
   return undefined;
 }
 
@@ -93,6 +88,7 @@ export async function deleteSnackItem(itemId: string): Promise<SnackActionState>
 
   revalidatePath("/snacks");
   revalidatePath("/");
+  revalidateTag("dashboard");
   return undefined;
 }
 
@@ -132,6 +128,7 @@ export async function createSnackPurchase(input: SnackPurchaseInput): Promise<Sn
 
   revalidatePath("/snacks");
   revalidatePath("/");
+  revalidateTag("dashboard");
   return undefined;
 }
 
@@ -153,6 +150,7 @@ export async function deleteSnackPurchase(purchaseId: string): Promise<SnackActi
 
   revalidatePath("/snacks");
   revalidatePath("/");
+  revalidateTag("dashboard");
   return undefined;
 }
 
@@ -208,6 +206,7 @@ export async function createSnackConsumption(
 
   revalidatePath("/snacks");
   revalidatePath("/");
+  revalidateTag("dashboard");
   return undefined;
 }
 
@@ -229,5 +228,6 @@ export async function deleteSnackConsumption(consumptionId: string): Promise<Sna
 
   revalidatePath("/snacks");
   revalidatePath("/");
+  revalidateTag("dashboard");
   return undefined;
 }

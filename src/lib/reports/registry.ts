@@ -60,7 +60,10 @@ export async function defaultPeriodFor(id: ReportId): Promise<ReportPeriod> {
         label: `${format(startOfWeek(now), "d MMM")} – ${format(endOfWeek(now), "d MMM yyyy")}`,
       };
     case "seasonal": {
-      const season = await prisma.season.findFirst({ where: { isActive: true } });
+      const season = await prisma.season.findFirst({
+        where: { isActive: true },
+        select: { name: true, startDate: true, endDate: true },
+      });
       if (season) {
         return {
           start: season.startDate,

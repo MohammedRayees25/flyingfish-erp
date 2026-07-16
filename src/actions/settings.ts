@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireModuleAccess, getCurrentUser } from "@/lib/auth/current-user";
 import { getOrCreateCompanySettings } from "@/lib/settings-data";
@@ -11,18 +11,11 @@ import {
   type RentalItemInput,
 } from "@/lib/validations/settings";
 import type { AuditAction, UserRole } from "@prisma/client";
+import { fieldErrorsFrom } from "@/lib/form-errors";
 
 export type SettingsActionState =
   | { error?: string; fieldErrors?: Record<string, string> }
   | undefined;
-
-function fieldErrorsFrom(error: import("zod").ZodError) {
-  const fieldErrors: Record<string, string> = {};
-  for (const issue of error.issues) {
-    fieldErrors[String(issue.path[0])] = issue.message;
-  }
-  return fieldErrors;
-}
 
 // Small internal utility other actions call to record what happened. Not a
 // validated form action -- callers are trusted, server-side code paths.
@@ -86,7 +79,10 @@ export async function createRentalItem(input: RentalItemInput): Promise<Settings
   }
   const data = parsed.data;
 
-  const existing = await prisma.rentalItem.findUnique({ where: { name: data.name } });
+  const existing = await prisma.rentalItem.findUnique({
+    where: { name: data.name },
+    select: { id: true },
+  });
   if (existing) {
     return { error: "A rental item with this name already exists.", fieldErrors: { name: "Already exists" } };
   }
@@ -113,7 +109,10 @@ export async function updateRentalItem(
   }
   const data = parsed.data;
 
-  const existing = await prisma.rentalItem.findUnique({ where: { name: data.name } });
+  const existing = await prisma.rentalItem.findUnique({
+    where: { name: data.name },
+    select: { id: true },
+  });
   if (existing && existing.id !== rentalItemId) {
     return { error: "A rental item with this name already exists.", fieldErrors: { name: "Already exists" } };
   }
@@ -143,7 +142,10 @@ export async function deleteRentalItem(rentalItemId: string): Promise<SettingsAc
 export async function updateUserRole(userId: string, role: UserRole): Promise<SettingsActionState> {
   const currentUser = await requireModuleAccess("settings");
 
-  const target = await prisma.user.findUnique({ where: { id: userId } });
+  const target = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { role: true, fullName: true },
+  });
   if (!target) return { error: "User not found." };
 
   if (target.role === "SUPER_ADMIN" && role !== "SUPER_ADMIN") {
@@ -171,7 +173,10 @@ export async function updateUserRole(userId: string, role: UserRole): Promise<Se
 export async function toggleUserActive(userId: string, isActive: boolean): Promise<SettingsActionState> {
   const currentUser = await requireModuleAccess("settings");
 
-  const target = await prisma.user.findUnique({ where: { id: userId } });
+  const target = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { role: true, fullName: true },
+  });
   if (!target) return { error: "User not found." };
 
   if (!isActive && target.role === "SUPER_ADMIN") {
@@ -193,5 +198,7 @@ export async function toggleUserActive(userId: string, isActive: boolean): Promi
   );
 
   revalidatePath("/settings");
+  revalidatePath("/");
+  revalidateTag("dashboard");
   return undefined;
 }

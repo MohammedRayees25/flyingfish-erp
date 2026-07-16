@@ -11,7 +11,7 @@ import { DiveLogFormSheet } from "@/components/dive-logs/dive-log-form-sheet";
 import { DiveLogsTable, type DiveLogRow } from "@/components/dive-logs/dive-logs-table";
 import { RecentDivesList, type RecentDive } from "@/components/dive-logs/recent-dives-list";
 import { RankedBarList } from "@/components/dashboard/ranked-bar-list";
-import { VisibilityTrendChart } from "@/components/dive-logs/visibility-trend-chart";
+import { VisibilityTrendChart } from "@/components/dive-logs/visibility-trend-chart-lazy";
 
 export const metadata: Metadata = { title: "Dive Logs" };
 
@@ -113,7 +113,9 @@ async function OverviewTab() {
     prisma.diveLog.findMany({
       orderBy: [{ date: "desc" }, { createdAt: "desc" }],
       take: 5,
-      include: {
+      select: {
+        id: true,
+        date: true,
         diveSite: { select: { name: true } },
         instructor: { select: { fullName: true } },
         _count: { select: { guests: true } },

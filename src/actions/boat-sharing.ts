@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireModuleAccess } from "@/lib/auth/current-user";
 import {
@@ -11,18 +11,11 @@ import {
 } from "@/lib/validations/boat-sharing";
 import { computeBoatSharingSplits } from "@/lib/boat-sharing";
 import type { PaymentStatus, VendorPaymentStatus } from "@prisma/client";
+import { fieldErrorsFrom } from "@/lib/form-errors";
 
 export type BoatSharingActionState =
   | { error?: string; fieldErrors?: Record<string, string> }
   | undefined;
-
-function fieldErrorsFrom(error: import("zod").ZodError) {
-  const fieldErrors: Record<string, string> = {};
-  for (const issue of error.issues) {
-    fieldErrors[String(issue.path[0])] = issue.message;
-  }
-  return fieldErrors;
-}
 
 export async function createBoatSharingEntry(
   input: BoatSharingEntryInput
@@ -65,6 +58,7 @@ export async function createBoatSharingEntry(
 
   revalidatePath("/boat-sharing");
   revalidatePath("/");
+  revalidateTag("dashboard");
   return undefined;
 }
 
@@ -84,7 +78,10 @@ export async function updateBoatSharingEntry(
 
   const existing = await prisma.boatSharingEntry.findUnique({
     where: { id: entryId },
-    include: { vendorPayments: true, splits: true },
+    select: {
+      vendorPayments: { select: { amount: true } },
+      splits: { select: { partyName: true, amountPaid: true } },
+    },
   });
   if (!existing) return { error: "Boat sharing entry not found." };
 
@@ -133,6 +130,7 @@ export async function updateBoatSharingEntry(
 
   revalidatePath("/boat-sharing");
   revalidatePath("/");
+  revalidateTag("dashboard");
   return undefined;
 }
 
@@ -141,6 +139,7 @@ export async function deleteBoatSharingEntry(entryId: string): Promise<BoatShari
   await prisma.boatSharingEntry.delete({ where: { id: entryId } });
   revalidatePath("/boat-sharing");
   revalidatePath("/");
+  revalidateTag("dashboard");
   return undefined;
 }
 
@@ -156,7 +155,10 @@ export async function recordVendorPayment(
   }
   const data = parsed.data;
 
-  const entry = await prisma.boatSharingEntry.findUnique({ where: { id: entryId } });
+  const entry = await prisma.boatSharingEntry.findUnique({
+    where: { id: entryId },
+    select: { outstandingAmount: true },
+  });
   if (!entry) return { error: "Boat sharing entry not found." };
 
   const newOutstanding = Math.max(0, Number(entry.outstandingAmount) - data.amount);
@@ -179,6 +181,7 @@ export async function recordVendorPayment(
 
   revalidatePath("/boat-sharing");
   revalidatePath("/");
+  revalidateTag("dashboard");
   return undefined;
 }
 
@@ -191,7 +194,10 @@ export async function recordSplitPayment(
     return { error: "Enter a valid payment amount." };
   }
 
-  const split = await prisma.boatSharingSplit.findUnique({ where: { id: splitId } });
+  const split = await prisma.boatSharingSplit.findUnique({
+    where: { id: splitId },
+    select: { amountPaid: true, amountDue: true },
+  });
   if (!split) return { error: "Split not found." };
 
   const newPaid = Number(split.amountPaid) + amount;
@@ -205,5 +211,6 @@ export async function recordSplitPayment(
 
   revalidatePath("/boat-sharing");
   revalidatePath("/");
+  revalidateTag("dashboard");
   return undefined;
 }

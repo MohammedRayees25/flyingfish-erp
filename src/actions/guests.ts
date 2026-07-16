@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireModuleAccess } from "@/lib/auth/current-user";
 import { guestSchema, type GuestInput } from "@/lib/validations/guest";
+import { fieldErrorsFrom } from "@/lib/form-errors";
 
 export type GuestActionState = { error?: string; fieldErrors?: Record<string, string> } | undefined;
 
@@ -60,14 +61,6 @@ export async function searchGuestsForSelect(query: string): Promise<GuestOption[
     select: { id: true, fullName: true, phone: true },
   });
   return guests;
-}
-
-function fieldErrorsFrom(error: import("zod").ZodError) {
-  const fieldErrors: Record<string, string> = {};
-  for (const issue of error.issues) {
-    fieldErrors[String(issue.path[0])] = issue.message;
-  }
-  return fieldErrors;
 }
 
 export async function createGuest(input: GuestInput): Promise<GuestActionState> {

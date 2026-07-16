@@ -12,8 +12,10 @@ import { StatCard } from "@/components/dashboard/stat-card";
 import { RankedBarList } from "@/components/dashboard/ranked-bar-list";
 import { PostFormSheet } from "@/components/social/post-form-sheet";
 import { PostsTable, type PostRow } from "@/components/social/posts-table";
-import { FollowerGrowthChart, type FollowerGrowthPoint } from "@/components/social/follower-growth-chart";
-import { EngagementRateChart, type EngagementPoint } from "@/components/social/engagement-rate-chart";
+import { FollowerGrowthChart } from "@/components/social/follower-growth-chart-lazy";
+import type { FollowerGrowthPoint } from "@/components/social/follower-growth-chart";
+import { EngagementRateChart } from "@/components/social/engagement-rate-chart-lazy";
+import type { EngagementPoint } from "@/components/social/engagement-rate-chart";
 import { FollowerSnapshotForm } from "@/components/social/follower-snapshot-form";
 import { FollowersPanel, type SnapshotRow } from "@/components/social/followers-panel";
 import {

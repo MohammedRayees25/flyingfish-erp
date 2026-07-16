@@ -1,10 +1,11 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireModuleAccess } from "@/lib/auth/current-user";
 import { reviewSchema, type ReviewInput } from "@/lib/validations/reviews";
 import type { ReviewReplyStatus, ReviewSentiment } from "@prisma/client";
+import { fieldErrorsFrom } from "@/lib/form-errors";
 
 export type ReviewActionState =
   | { error?: string; fieldErrors?: Record<string, string> }
@@ -12,14 +13,6 @@ export type ReviewActionState =
 
 function toDateOnly(dateStr: string): Date {
   return new Date(`${dateStr}T00:00:00.000Z`);
-}
-
-function fieldErrorsFrom(error: import("zod").ZodError) {
-  const fieldErrors: Record<string, string> = {};
-  for (const issue of error.issues) {
-    fieldErrors[String(issue.path[0])] = issue.message;
-  }
-  return fieldErrors;
 }
 
 function deriveSentiment(rating: number): ReviewSentiment {
@@ -56,6 +49,7 @@ export async function createReview(input: ReviewInput): Promise<ReviewActionStat
 
   revalidatePath("/reviews");
   revalidatePath("/");
+  revalidateTag("dashboard");
   return undefined;
 }
 
@@ -91,6 +85,7 @@ export async function updateReview(
 
   revalidatePath("/reviews");
   revalidatePath("/");
+  revalidateTag("dashboard");
   return undefined;
 }
 
@@ -101,6 +96,7 @@ export async function deleteReview(reviewId: string): Promise<ReviewActionState>
 
   revalidatePath("/reviews");
   revalidatePath("/");
+  revalidateTag("dashboard");
   return undefined;
 }
 

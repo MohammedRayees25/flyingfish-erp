@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { RevenueChart } from "@/components/dashboard/revenue-chart";
+import { RevenueChart } from "@/components/dashboard/revenue-chart-lazy";
 import { formatCurrencyINR, EXPENSE_CATEGORY_LABELS, REVENUE_CATEGORY_LABELS } from "@/lib/labels";
 import type { ExpenseCategory, RevenueCategory } from "@prisma/client";
 

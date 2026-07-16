@@ -34,12 +34,10 @@ export default async function FreelancerDetailPage({
   await requireModuleAccess("freelancers");
   const { id } = await params;
 
-  const freelancer = await prisma.freelancer.findUnique({ where: { id } });
-  if (!freelancer) notFound();
-
   const thirtyDaysAgo = subDays(new Date(), 30);
 
-  const [attendance, payments] = await Promise.all([
+  const [freelancer, attendance, payments] = await Promise.all([
+    prisma.freelancer.findUnique({ where: { id } }),
     prisma.freelancerAttendance.findMany({
       where: { freelancerId: id, date: { gte: thirtyDaysAgo } },
       orderBy: { date: "desc" },
@@ -49,6 +47,7 @@ export default async function FreelancerDetailPage({
       orderBy: { createdAt: "desc" },
     }),
   ]);
+  if (!freelancer) notFound();
 
   // Client components can't receive Prisma `Decimal` values, so only the
   // freelancer's own scalar fields (converted to number) go to the edit form.

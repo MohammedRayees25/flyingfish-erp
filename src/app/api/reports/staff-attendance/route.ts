@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
 
   const records = await prisma.staffAttendance.findMany({
     where: { date: { gte: monthStart, lte: monthEnd } },
-    include: { user: true },
+    select: { date: true, status: true, user: { select: { fullName: true } } },
     orderBy: [{ date: "asc" }, { user: { fullName: "asc" } }],
   });
 

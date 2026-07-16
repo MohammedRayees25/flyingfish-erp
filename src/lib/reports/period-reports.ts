@@ -68,6 +68,7 @@ export async function buildRevenueReport(period: ReportPeriod): Promise<ReportTa
     prisma.financeTransaction.findMany({
       where: { type: "REVENUE", date: { gte: period.start, lte: period.end } },
       orderBy: { date: "desc" },
+      select: { date: true, revenueCategory: true, description: true, amount: true },
     }),
     getCategoryBreakdown(period.start, period.end, "REVENUE"),
   ]);
@@ -108,6 +109,7 @@ export async function buildExpenseReport(period: ReportPeriod): Promise<ReportTa
     prisma.financeTransaction.findMany({
       where: { type: "EXPENSE", date: { gte: period.start, lte: period.end } },
       orderBy: { date: "desc" },
+      select: { date: true, expenseCategory: true, description: true, amount: true },
     }),
     getCategoryBreakdown(period.start, period.end, "EXPENSE"),
   ]);

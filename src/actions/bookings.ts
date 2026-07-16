@@ -1,22 +1,15 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireModuleAccess } from "@/lib/auth/current-user";
 import { bookingSchema, type BookingInput } from "@/lib/validations/booking";
 import type { BookingStatus, PaymentStatus } from "@prisma/client";
+import { fieldErrorsFrom } from "@/lib/form-errors";
 
 export type BookingActionState =
   | { error?: string; fieldErrors?: Record<string, string> }
   | undefined;
-
-function fieldErrorsFrom(error: import("zod").ZodError) {
-  const fieldErrors: Record<string, string> = {};
-  for (const issue of error.issues) {
-    fieldErrors[String(issue.path[0])] = issue.message;
-  }
-  return fieldErrors;
-}
 
 export async function createBooking(
   input: BookingInput,
@@ -58,6 +51,7 @@ export async function createBooking(
 
   revalidatePath("/bookings");
   revalidatePath("/");
+  revalidateTag("dashboard");
   return undefined;
 }
 
@@ -74,25 +68,26 @@ export async function updateBooking(
   }
   const data = parsed.data;
 
-  await prisma.booking.update({
-    where: { id: bookingId },
-    data: {
-      guestId: data.guestId,
-      instructorId: data.instructorId || null,
-      boatId: data.boatId || null,
-      diveSiteId: data.diveSiteId || null,
-      activityType: data.activityType,
-      date: new Date(data.date),
-      status: data.status,
-      price: data.price,
-      notes: data.notes || null,
-    },
-  });
-
-  const existingPayment = await prisma.payment.findFirst({
-    where: { bookingId },
-    orderBy: { createdAt: "desc" },
-  });
+  const [, existingPayment] = await Promise.all([
+    prisma.booking.update({
+      where: { id: bookingId },
+      data: {
+        guestId: data.guestId,
+        instructorId: data.instructorId || null,
+        boatId: data.boatId || null,
+        diveSiteId: data.diveSiteId || null,
+        activityType: data.activityType,
+        date: new Date(data.date),
+        status: data.status,
+        price: data.price,
+        notes: data.notes || null,
+      },
+    }),
+    prisma.payment.findFirst({
+      where: { bookingId },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
 
   if (data.price > 0) {
     if (existingPayment) {
@@ -119,6 +114,7 @@ export async function updateBooking(
 
   revalidatePath("/bookings");
   revalidatePath("/");
+  revalidateTag("dashboard");
   return undefined;
 }
 
@@ -128,6 +124,7 @@ export async function deleteBooking(bookingId: string): Promise<BookingActionSta
   await prisma.booking.delete({ where: { id: bookingId } });
   revalidatePath("/bookings");
   revalidatePath("/");
+  revalidateTag("dashboard");
   return undefined;
 }
 
@@ -139,5 +136,6 @@ export async function updateBookingStatus(
   await prisma.booking.update({ where: { id: bookingId }, data: { status } });
   revalidatePath("/bookings");
   revalidatePath("/");
+  revalidateTag("dashboard");
   return undefined;
 }

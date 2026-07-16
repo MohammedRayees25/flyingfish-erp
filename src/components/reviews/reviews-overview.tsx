@@ -2,7 +2,7 @@ import { Star, MessageSquareText, Hourglass, CalendarClock } from "lucide-react"
 import { StatCard } from "@/components/dashboard/stat-card";
 import { RankedBarList } from "@/components/dashboard/ranked-bar-list";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { ReviewTrendChart } from "@/components/reviews/review-trend-chart";
+import { ReviewTrendChart } from "@/components/reviews/review-trend-chart-lazy";
 import type { ReviewTrendPoint } from "@/lib/reports/reviews-data";
 
 export function ReviewsOverview({
