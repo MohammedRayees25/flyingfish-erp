@@ -160,6 +160,7 @@ export async function createGuestCertification(
   await prisma.guestCertification.create({ data: buildCertificationData(parsed.data) });
 
   revalidatePath("/certifications");
+  revalidatePath("/");
   return undefined;
 }
 
@@ -183,6 +184,7 @@ export async function updateGuestCertification(
   });
 
   revalidatePath("/certifications");
+  revalidatePath("/");
   return undefined;
 }
 
@@ -194,5 +196,6 @@ export async function deleteGuestCertification(
   await prisma.guestCertification.delete({ where: { id: certificationId } });
 
   revalidatePath("/certifications");
+  revalidatePath("/");
   return undefined;
 }

@@ -56,6 +56,7 @@ export async function createSocialPost(input: SocialPostInput): Promise<SocialAc
   });
 
   revalidatePath("/social");
+  revalidatePath("/");
   return undefined;
 }
 
@@ -93,6 +94,7 @@ export async function updateSocialPost(
   });
 
   revalidatePath("/social");
+  revalidatePath("/");
   return undefined;
 }
 
@@ -100,6 +102,7 @@ export async function deleteSocialPost(postId: string): Promise<SocialActionStat
   await requireModuleAccess("social");
   await prisma.socialMediaPost.delete({ where: { id: postId } });
   revalidatePath("/social");
+  revalidatePath("/");
   return undefined;
 }
 

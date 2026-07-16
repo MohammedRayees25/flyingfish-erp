@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { addDays, format, parseISO } from "date-fns";
 import { toast } from "sonner";
 import type { User, AttendanceStatus } from "@prisma/client";
-import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -25,9 +25,20 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { ATTENDANCE_STATUS_LABELS } from "@/lib/labels";
 import { ATTENDANCE_BADGE_VARIANT } from "@/lib/status-badges";
-import { markAttendance } from "@/actions/staff-attendance";
+import { markAttendance, deleteAttendance } from "@/actions/staff-attendance";
+import { AttendanceFormSheet } from "@/components/staff/attendance-form-sheet";
 
 const STATUS_OPTIONS: AttendanceStatus[] = [
   "PRESENT",
@@ -36,6 +47,8 @@ const STATUS_OPTIONS: AttendanceStatus[] = [
   "LEAVE",
   "HOLIDAY",
 ];
+
+type AttendanceEntry = { status: AttendanceStatus; notes: string | null };
 
 export function DailyAttendance({
   date,
@@ -46,12 +59,13 @@ export function DailyAttendance({
   date: string;
   month: string;
   staff: Omit<User, "monthlySalary">[];
-  attendance: Record<string, AttendanceStatus>;
+  attendance: Record<string, AttendanceEntry>;
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const [isPending, startTransition] = React.useTransition();
   const [pendingUserId, setPendingUserId] = React.useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = React.useState<string | null>(null);
 
   function goToDate(next: string) {
     const params = new URLSearchParams();
@@ -63,7 +77,7 @@ export function DailyAttendance({
   function handleStatusChange(userId: string, status: AttendanceStatus) {
     setPendingUserId(userId);
     startTransition(async () => {
-      const result = await markAttendance(userId, date, status);
+      const result = await markAttendance(userId, date, status, attendance[userId]?.notes ?? undefined);
       if (result?.error) {
         toast.error(result.error);
       } else {
@@ -74,11 +88,23 @@ export function DailyAttendance({
     });
   }
 
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    const result = await deleteAttendance(deleteTarget, date);
+    setDeleteTarget(null);
+    if (result?.error) toast.error(result.error);
+    else {
+      toast.success("Attendance record deleted");
+      router.refresh();
+    }
+  }
+
   const prevDate = format(addDays(parseISO(date), -1), "yyyy-MM-dd");
   const nextDate = format(addDays(parseISO(date), 1), "yyyy-MM-dd");
   const today = format(new Date(), "yyyy-MM-dd");
 
   return (
+    <>
     <Card>
       <CardContent className="flex flex-col gap-4 pt-6">
         <div className="flex flex-wrap items-center gap-2">
@@ -111,18 +137,21 @@ export function DailyAttendance({
                 <TableHead>Staff</TableHead>
                 <TableHead>Current status</TableHead>
                 <TableHead>Set status</TableHead>
+                <TableHead>Notes</TableHead>
+                <TableHead className="w-20" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {staff.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
                     No active staff found.
                   </TableCell>
                 </TableRow>
               ) : (
                 staff.map((member) => {
-                  const status = attendance[member.id];
+                  const entry = attendance[member.id];
+                  const status = entry?.status;
                   const rowPending = isPending && pendingUserId === member.id;
                   return (
                     <TableRow key={member.id}>
@@ -161,6 +190,32 @@ export function DailyAttendance({
                           ) : null}
                         </div>
                       </TableCell>
+                      <TableCell className="max-w-48 truncate text-sm text-muted-foreground">
+                        {entry?.notes ?? "—"}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex justify-end gap-1">
+                          <AttendanceFormSheet
+                            mode="edit"
+                            staff={staff}
+                            record={{
+                              userId: member.id,
+                              date,
+                              status: status ?? "PRESENT",
+                              notes: entry?.notes ?? null,
+                            }}
+                          />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Delete attendance record"
+                            disabled={!status}
+                            onClick={() => setDeleteTarget(member.id)}
+                          >
+                            <Trash2 className="size-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </TableCell>
                     </TableRow>
                   );
                 })
@@ -170,5 +225,22 @@ export function DailyAttendance({
         </div>
       </CardContent>
     </Card>
+
+    <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete this attendance record?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This removes the status marked for this staff member on this date. This cannot be
+            undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={handleDelete}>Delete</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }

@@ -53,6 +53,7 @@ export async function createSnackItem(input: SnackItemInput): Promise<SnackActio
   });
 
   revalidatePath("/snacks");
+  revalidatePath("/");
   return undefined;
 }
 
@@ -81,6 +82,7 @@ export async function updateSnackItem(
   });
 
   revalidatePath("/snacks");
+  revalidatePath("/");
   return undefined;
 }
 
@@ -90,6 +92,7 @@ export async function deleteSnackItem(itemId: string): Promise<SnackActionState>
   await prisma.snackItem.delete({ where: { id: itemId } });
 
   revalidatePath("/snacks");
+  revalidatePath("/");
   return undefined;
 }
 
@@ -128,6 +131,7 @@ export async function createSnackPurchase(input: SnackPurchaseInput): Promise<Sn
   });
 
   revalidatePath("/snacks");
+  revalidatePath("/");
   return undefined;
 }
 
@@ -148,6 +152,7 @@ export async function deleteSnackPurchase(purchaseId: string): Promise<SnackActi
   });
 
   revalidatePath("/snacks");
+  revalidatePath("/");
   return undefined;
 }
 
@@ -202,6 +207,7 @@ export async function createSnackConsumption(
   }
 
   revalidatePath("/snacks");
+  revalidatePath("/");
   return undefined;
 }
 
@@ -222,5 +228,6 @@ export async function deleteSnackConsumption(consumptionId: string): Promise<Sna
   });
 
   revalidatePath("/snacks");
+  revalidatePath("/");
   return undefined;
 }
